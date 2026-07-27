@@ -141,6 +141,31 @@ def detect_defects(img_bgr, apple_mask):
 
 
 
+
+
+# ==================== 品质分级 ====================
+
+def classify_quality(defect_pixels, apple_pixels):
+    """
+    根据缺陷面积占比进行三等级品质分级。
+    返回: (grade, defect_ratio, color)
+      - grade: 等级名称（中文+英文，如 "优质 Premium"）
+      - defect_ratio: 缺陷占比 (0.0 ~ 1.0)
+      - color: 显示用的 BGR 颜色元组
+    """
+    if apple_pixels == 0:
+        return "未知 Unknown", 0.0, (128, 128, 128)
+
+    defect_ratio = defect_pixels / apple_pixels
+
+    if defect_ratio < PREMIUM_THRESHOLD:
+        return "优质 Premium", defect_ratio, (0, 200, 0)
+    elif defect_ratio <= STANDARD_THRESHOLD:
+        return "合格 Standard", defect_ratio, (0, 200, 200)
+    else:
+        return "不合格 Reject", defect_ratio, (0, 0, 200)
+
+
 # ==================== 主函数 ====================
 def main():
     parser = argparse.ArgumentParser(description="苹果表面缺陷识别程序")
@@ -184,6 +209,12 @@ def process_single_image(image_path):
         defect_pixels = np.sum(defect_mask > 0)
         defect_count = len(defect_contours)
         print(f"  [检测] 完成 → 发现 {defect_count} 个缺陷区域，共 {defect_pixels} 像素")
+        # 4. 品质分级
+        apple_pixels = np.sum(apple_mask > 0)
+        grade, defect_ratio, grade_color = classify_quality(defect_pixels, apple_pixels)
+        print(f"  [分级] 缺陷占比: {defect_ratio*100:.2f}%")
+        print(f"  [分级] 品质等级: {grade}")
+
 
     except Exception as e:
         print(f"  [错误] ❌ {e}")
