@@ -37,6 +37,27 @@ def load_image(path):
 def ensure_output_dir(path="output"):
     os.makedirs(path, exist_ok=True)
 
+
+# ==================== 图像预处理 ====================
+
+def preprocess(img):
+    """
+    图像预处理：
+    1. 等比例缩放到统一宽度 (IMAGE_WIDTH)
+    2. 高斯模糊降噪
+    返回: (img_blurred, img_resized)
+    """
+    h, w = img.shape[:2]
+    scale = IMAGE_WIDTH / w
+    new_size = (IMAGE_WIDTH, int(round(h * scale)))
+    img_resized = cv2.resize(img, new_size, interpolation=cv2.INTER_AREA)
+
+    # 高斯模糊去噪（5×5 核）
+    img_blurred = cv2.GaussianBlur(img_resized, (5, 5), 0)
+
+    return img_blurred, img_resized
+
+
 # ==================== 主函数占位 ====================
 def main():
     parser = argparse.ArgumentParser(description="苹果表面缺陷识别程序")
@@ -59,7 +80,13 @@ def process_single_image(image_path):
     print(f"\n{'='*50}")
     print(f"处理: {image_path}")
     print(f"{'='*50}")
-    # TODO: 逐步实现各步骤
+    try:
+        # 1. 加载 & 预处理
+        img_original = load_image(image_path)
+        img_processed, img_resized = preprocess(img_original)
+        print(f"  [预处理] 完成 → 尺寸: {img_processed.shape[1]}x{img_processed.shape[0]}")
+    except Exception as e:
+        print(f"  [错误] ❌ {e}")
 
 if __name__ == "__main__":
     main()
