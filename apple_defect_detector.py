@@ -58,7 +58,48 @@ def preprocess(img):
     return img_blurred, img_resized
 
 
-# ==================== 主函数占位 ====================
+# ==================== 苹果区域分割 ====================
+
+def segment_apple(img_bgr):
+    """
+    从背景中分割出苹果区域。
+    利用 HSV 色彩空间 + 多范围阈值 + 形态学操作。
+    返回: (mask, apple_contour)
+      - mask: 二值图，苹果区域为白色 (255)
+      - apple_contour: 苹果最外层轮廓（用于后续绘制）
+    """
+    hsv = cv2.cvtColor(img_bgr, cv2.COLOR_BGR2HSV)
+
+    # 合并所有 HSV 颜色范围
+    full_mask = np.zeros(hsv.shape[:2], dtype=np.uint8)
+    for lower, upper in APPLE_HSV_RANGES:
+        mask = cv2.inRange(hsv, lower, upper)
+        full_mask = cv2.bitwise_or(full_mask, mask)
+
+    # 形态学操作
+    # 开运算：先腐蚀后膨胀，去除小噪点
+    kernel_open = cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (5, 5))
+    mask = cv2.morphologyEx(full_mask, cv2.MORPH_OPEN, kernel_open)
+
+    # 闭运算：先膨胀后腐蚀，填充苹果内部小空洞
+    kernel_close = cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (15, 15))
+    mask = cv2.morphologyEx(mask, cv2.MORPH_CLOSE, kernel_close)
+
+    # 找到所有外部轮廓，取面积最大的（即苹果）
+    contours, _ = cv2.findContours(mask, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+    if not contours:
+        return None, None
+
+    apple_contour = max(contours, key=cv2.contourArea)
+
+    # 用最大轮廓重新生成精确 mask（去掉轮廓外的残留）
+    apple_mask = np.zeros(mask.shape, dtype=np.uint8)
+    cv2.drawContours(apple_mask, [apple_contour], -1, 255, -1)
+
+    return apple_mask, apple_contour
+
+
+# ==================== 主函数 ====================
 def main():
     parser = argparse.ArgumentParser(description="苹果表面缺陷识别程序")
     parser.add_argument("input", help="输入图片路径或包含图片的目录")
@@ -85,6 +126,19 @@ def process_single_image(image_path):
         img_original = load_image(image_path)
         img_processed, img_resized = preprocess(img_original)
         print(f"  [预处理] 完成 → 尺寸: {img_processed.shape[1]}x{img_processed.shape[0]}")
+
+        # 2. 分割苹果区域
+        apple_mask, apple_contour = segment_apple(img_processed)
+        if apple_mask is None:
+            print(f"  [分割] ❌ 未检测到苹果区域，跳过")
+            return
+        apple_pixels = np.sum(apple_mask > 0)
+        total_pixels = apple_mask.shape[0] * apple_mask.shape[1]
+        area_ratio = apple_pixels / total_pixels * 100
+        print(f"  [分割] 完成 → 苹果区域: {apple_pixels} 像素 ({area_ratio:.1f}% 画面占比)")
+
+        # TODO: 下一步 — 缺陷检测
+
     except Exception as e:
         print(f"  [错误] ❌ {e}")
 
