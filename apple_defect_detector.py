@@ -166,6 +166,67 @@ def classify_quality(defect_pixels, apple_pixels):
         return "不合格 Reject", defect_ratio, (0, 0, 200)
 
 
+
+# ==================== 结果显示 ====================
+
+def visualize_result(img_bgr, apple_contour, defect_contours, defect_mask,
+                     grade, defect_ratio, grade_color):
+    """
+    在原图上标注缺陷并显示品质等级。
+    返回标注后的图片。
+    """
+    result = img_bgr.copy()
+
+    # 1. 绘制苹果轮廓（绿色细线）
+    cv2.drawContours(result, [apple_contour], -1, (0, 220, 0), 2)
+
+    # 2. 在缺陷区域上叠加半透明红色标记
+    overlay = result.copy()
+    overlay[defect_mask > 0] = (0, 0, 255)  # 红色标记缺陷
+    alpha = 0.5
+    result = cv2.addWeighted(overlay, alpha, result, 1 - alpha, 0)
+
+    # 3. 圈出每个缺陷轮廓并编号
+    for i, contour in enumerate(defect_contours):
+        area = cv2.contourArea(contour)
+        cv2.drawContours(result, [contour], -1, (0, 0, 255), 2)
+        M = cv2.moments(contour)
+        if M["m00"] > 0:
+            cx = int(M["m10"] / M["m00"])
+            cy = int(M["m01"] / M["m00"])
+            cv2.putText(result, f"#{i+1}", (cx-5, cy+5),
+                        cv2.FONT_HERSHEY_SIMPLEX, 0.5, (255, 255, 255), 1)
+
+    # 4. 左上角显示品质信息（半透明背景）
+    info_bg = result[0:90, 0:350].copy()
+    cv2.rectangle(info_bg, (0, 0), (350, 90), (0, 0, 0), -1)
+    result[0:90, 0:350] = cv2.addWeighted(info_bg, 0.6, result[0:90, 0:350], 0.4, 0)
+
+    grade_text = f'等级: {grade}'
+    ratio_text = f'缺陷占比: {defect_ratio*100:.2f}%'
+    count_text = f'缺陷数量: {len(defect_contours)}'
+
+    cv2.putText(result, grade_text, (15, 30),
+                cv2.FONT_HERSHEY_SIMPLEX, 0.7, grade_color, 2)
+    cv2.putText(result, ratio_text, (15, 55),
+                cv2.FONT_HERSHEY_SIMPLEX, 0.5, (200, 200, 200), 1)
+    cv2.putText(result, count_text, (15, 75),
+                cv2.FONT_HERSHEY_SIMPLEX, 0.5, (200, 200, 200), 1)
+
+    return result
+
+
+def save_result(result, original_path, output_dir='output'):
+    """保存结果图片到输出目录。"""
+    ensure_output_dir(output_dir)
+    stem = Path(original_path).stem
+    timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
+    out_path = os.path.join(output_dir, f'{stem}_result_{timestamp}.jpg')
+    cv2.imwrite(out_path, result)
+    print(f'  [输出] 结果已保存: {out_path}')
+    return out_path
+
+
 # ==================== 主函数 ====================
 def main():
     parser = argparse.ArgumentParser(description="苹果表面缺陷识别程序")
@@ -215,9 +276,16 @@ def process_single_image(image_path):
         print(f"  [分级] 缺陷占比: {defect_ratio*100:.2f}%")
         print(f"  [分级] 品质等级: {grade}")
 
+        # 5. 结果可视化 & 输出
+        result_img = visualize_result(
+            img_processed, apple_contour, defect_contours,
+            defect_mask, grade, defect_ratio, grade_color
+        )
+        save_result(result_img, image_path)
+        print(f"  [完成] ✅")
 
     except Exception as e:
-        print(f"  [错误] ❌ {e}")
+        print(f"  [??] ❌ {e}")
 
 if __name__ == "__main__":
     main()
