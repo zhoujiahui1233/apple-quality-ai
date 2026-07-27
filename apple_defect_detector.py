@@ -99,6 +99,48 @@ def segment_apple(img_bgr):
     return apple_mask, apple_contour
 
 
+# ==================== 缺陷检测 ====================
+
+def detect_defects(img_bgr, apple_mask):
+    """
+    结合 HSV 颜色阈值 + Laplacian 纹理分析的缺陷检测。
+    返回: (defect_mask, defect_contours)
+      - defect_mask: 二值图，缺陷像素为白色 (255)
+      - defect_contours: 过滤后缺陷轮廓列表（面积 > 20 像素）
+    """
+    hsv = cv2.cvtColor(img_bgr, cv2.COLOR_BGR2HSV)
+
+    # Method 1: HSV 颜色阈值
+    hsv_defect_mask = np.zeros(hsv.shape[:2], dtype=np.uint8)
+    for lower, upper in DEFECT_HSV_RANGES:
+        mask = cv2.inRange(hsv, lower, upper)
+        hsv_defect_mask = cv2.bitwise_or(hsv_defect_mask, mask)
+
+    # Method 2: Laplacian 纹理分析
+    gray = cv2.cvtColor(img_bgr, cv2.COLOR_BGR2GRAY)
+    laplacian = cv2.Laplacian(gray, cv2.CV_64F)
+    laplacian_abs = np.uint8(np.abs(laplacian))
+    _, texture_defect_mask = cv2.threshold(laplacian_abs, 0, 255, cv2.THRESH_BINARY + cv2.THRESH_OTSU)
+
+    # 结合两种方法
+    combined = cv2.bitwise_or(hsv_defect_mask, texture_defect_mask)
+
+    # 只保留苹果区域内的缺陷
+    defect_mask = cv2.bitwise_and(combined, apple_mask)
+
+    # 形态学清理
+    kernel = cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (3, 3))
+    defect_mask = cv2.morphologyEx(defect_mask, cv2.MORPH_OPEN, kernel)
+    defect_mask = cv2.morphologyEx(defect_mask, cv2.MORPH_CLOSE, kernel)
+
+    # 找轮廓，过滤小区域
+    contours, _ = cv2.findContours(defect_mask, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+    defect_contours = [c for c in contours if cv2.contourArea(c) > 20]
+
+    return defect_mask, defect_contours
+
+
+
 # ==================== 主函数 ====================
 def main():
     parser = argparse.ArgumentParser(description="苹果表面缺陷识别程序")
@@ -137,7 +179,11 @@ def process_single_image(image_path):
         area_ratio = apple_pixels / total_pixels * 100
         print(f"  [分割] 完成 → 苹果区域: {apple_pixels} 像素 ({area_ratio:.1f}% 画面占比)")
 
-        # TODO: 下一步 — 缺陷检测
+        # 3. 缺陷检测
+        defect_mask, defect_contours = detect_defects(img_processed, apple_mask)
+        defect_pixels = np.sum(defect_mask > 0)
+        defect_count = len(defect_contours)
+        print(f"  [检测] 完成 → 发现 {defect_count} 个缺陷区域，共 {defect_pixels} 像素")
 
     except Exception as e:
         print(f"  [错误] ❌ {e}")
