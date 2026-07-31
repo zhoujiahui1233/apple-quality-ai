@@ -45,8 +45,10 @@
 ## 3. 统一检测流程
 
 ```
-上传图片 + 品类参数
+上传图片 + 品类参数（apple / bread / beverage / auto）
   → 预处理（缩放、归一化）
+  → 品类自动识别（category=auto 时，基于颜色启发式，detector/autodetect.py）
+  → 分割食品区域（HSV / YOLO 定位）
   → 分割食品区域（HSV / YOLO 定位）
   → 品类适配器 detect_surface()
   → 品类适配器 classify_grade()
@@ -81,6 +83,8 @@
 
 - `start.bat`：一键重启（按端口 PID 精准停止，不影响其他 Python 程序）
 - `scripts/backup.py`：代码+数据打包备份，`--full` 含模型权重
+- `scripts/run_experiment.py`：在收集数据集上运行模型，生成显著性分析数据（output/experiment_results.json）
+- `scripts/export_dataset.py`：数据集按 80/20 切分导出 train/val
 - 日志轮转：`logs/app.log` 单文件 5MB，保留 3 份历史（RotatingFileHandler）
 - 模型预热：启动时加载全部模型，避免首次请求卡顿
 

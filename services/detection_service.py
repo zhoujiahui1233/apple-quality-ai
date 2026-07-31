@@ -31,13 +31,32 @@ class DetectionService:
 
     def process_upload(self, file_storage, category: str, tuning=None) -> dict:
         tuning = tuning or {}
-        if category == "apple":
-            return self._process_apple(file_storage, tuning)
-        return self._process_generic(file_storage, category)
-
-    def _process_generic(self, file_storage, category: str) -> dict:
-        """面包/饮料: 走统一管线"""
+        if category == "auto":
+            return self._process_auto(file_storage, tuning)
         unique_name, upload_path = self._save_upload(file_storage)
+        if category == "apple":
+            return self._process_apple(upload_path, unique_name, tuning)
+        return self._process_generic(upload_path, unique_name, category)
+
+    def _process_auto(self, file_storage, tuning=None) -> dict:
+        """自动识别品类后再检测"""
+        from detector.autodetect import auto_detect_category
+        unique_name, upload_path = self._save_upload(file_storage)
+        img = cv2.imread(upload_path)
+        if img is None:
+            return {"error": "无法解析图片文件"}
+        category, confidence = auto_detect_category(img)
+        if category == "apple":
+            result = self._process_apple(upload_path, unique_name, tuning)
+        else:
+            result = self._process_generic(upload_path, unique_name, category)
+        if "error" not in result:
+            result["category_detected"] = category
+            result["auto_confidence"] = confidence
+        return result
+
+    def _process_generic(self, upload_path: str, unique_name: str, category: str) -> dict:
+        """面包/饮料: 走统一管线"""
         img = cv2.imread(upload_path)
         if img is None:
             return {"error": "无法解析图片文件"}
@@ -53,6 +72,7 @@ class DetectionService:
         record = DetectionRecord(
             filename=unique_name,
             result_filename=result_filename,
+            category=category,
             grade=pipe["grade_label"],
             grade_color=str(pipe["grade_color"]),
             defect_ratio=pipe["defect_ratio"],
@@ -73,7 +93,7 @@ class DetectionService:
             "result_image": url_for("static", filename=f"uploads/{result_filename}"),
         }
 
-    def _process_apple(self, file_storage, tuning=None) -> dict:
+    def _process_apple(self, upload_path: str, unique_name: str, tuning=None) -> dict:
         """苹果: 四模型对比全功能（原有逻辑）"""
         from apple_defect_detector import (
             preprocess, segment_apple, detect_defects, classify_quality,
@@ -82,7 +102,6 @@ class DetectionService:
             visualize_yolo, predict_with_yolo_detect, visualize_yolo_detect,
         )
 
-        unique_name, upload_path = self._save_upload(file_storage)
         img = cv2.imread(upload_path)
         if img is None:
             return {"error": "无法解析图片文件"}
@@ -146,6 +165,7 @@ class DetectionService:
 
         record = DetectionRecord(
             filename=unique_name, result_filename=result_filename,
+            category="apple",
             grade=grade, grade_color=str(grade_color),
             defect_ratio=float(defect_ratio), defect_count=defect_count,
             apple_area=apple_pixels, defect_area=defect_pixels,

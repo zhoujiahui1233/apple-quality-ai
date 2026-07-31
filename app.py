@@ -31,6 +31,24 @@ os.environ['YOLO_CONFIG_DIR'] = str(config.ROOT_DIR / '.ultralytics')
 
 app = Flask(__name__)
 
+# ==================== 轻量数据库迁移 ====================
+def _migrate_db():
+    """为旧数据库补充新增字段（如 category）"""
+    import sqlite3
+    db_path = config.INSTANCE_DIR / "database.db"
+    if not db_path.exists():
+        return
+    try:
+        conn = sqlite3.connect(str(db_path))
+        cols = [r[1] for r in conn.execute("PRAGMA table_info(detection_records)")]
+        if "category" not in cols:
+            conn.execute("ALTER TABLE detection_records ADD COLUMN category VARCHAR(20) DEFAULT 'apple'")
+            conn.commit()
+        conn.close()
+    except Exception as e:
+        logger.warning(f"数据库迁移失败: {e}")
+
+
 # ==================== 模型预热 ====================
 def warmup_models():
     """启动时预加载所有模型，避免首次检测缓慢"""
@@ -414,10 +432,17 @@ def significance():
 
 @app.route('/api/stats/models')
 def stats_models():
-    """四模型 x 三品类 准确率矩阵（真实数据接训练结果）"""
-    from services.stats_service import model_comparison_table
-    # 预设四模型，带空数据冗余；未来接实验数据
+    """四模型 x 三品类 准确率矩阵（优先读实验数据）"""
+    exp_path = config.OUTPUT_DIR / "experiment_results.json"
+    if exp_path.exists():
+        try:
+            d = json.loads(exp_path.read_text(encoding="utf-8"))
+            d["note"] = "实验数据 · " + d.get("generated_at", "")
+            return jsonify(d)
+        except Exception as e:
+            logger.warning(f"实验数据读取失败: {e}")
     return jsonify({
+        "source": "sample",
         "categories": ["apple", "bread", "beverage"],
         "models": ["svm", "rf", "dl", "yolo"],
         "accuracy": {
@@ -425,7 +450,10 @@ def stats_models():
             "bread": {"svm": 91.5, "rf": 92.0, "dl": 93.2, "yolo": 94.1},
             "beverage": {"svm": 88.3, "rf": 89.0, "dl": 90.4, "yolo": 91.2},
         },
-        "note": "示例数据，请用实验结果替换"
+        "n": {},
+        "mcnemar": {},
+        "grade_accuracy": {},
+        "note": "示例数据，请运行 python scripts/run_experiment.py 生成真实实验结果"
     })
 
 
@@ -445,6 +473,7 @@ if __name__ == '__main__':
     logging.getLogger().addHandler(_fh)
     with app.app_context():
         db.create_all()
+        _migrate_db()
     warmup_models()
     # 显示本机网络地址，方便手机访问
     import socket

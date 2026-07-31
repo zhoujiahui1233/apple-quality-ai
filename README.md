@@ -56,6 +56,8 @@ E:\apple
 ├── static/                     # 静态资源与上传图片
 ├── tests/                      # pytest 单元测试
 ├── scripts/backup.py           # 备份工具
+├── scripts/run_experiment.py  # 实验脚本（显著性数据生成）
+├── scripts/export_dataset.py  # 数据集切分导出（train/val）
 ├── dataset_collected/          # 收集的数据集（按 品类/标签 两级）
 ├── logs/                       # 运行日志（自动轮转）
 └── backups/                    # 备份压缩包

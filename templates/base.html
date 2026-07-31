@@ -181,6 +181,7 @@ body {
         <button class="cat-btn active" data-cat="apple" onclick="switchCategory('apple')" style="padding:4px 10px;border-radius:8px;border:1px solid var(--border);background:rgba(0,212,255,0.06);color:var(--text-dim);font-size:12px;cursor:pointer;">🍎 苹果</button>
         <button class="cat-btn" data-cat="bread" onclick="switchCategory('bread')" style="padding:4px 10px;border-radius:8px;border:1px solid var(--border);background:rgba(0,212,255,0.06);color:var(--text-dim);font-size:12px;cursor:pointer;">🍞 面包</button>
         <button class="cat-btn" data-cat="beverage" onclick="switchCategory('beverage')" style="padding:4px 10px;border-radius:8px;border:1px solid var(--border);background:rgba(0,212,255,0.06);color:var(--text-dim);font-size:12px;cursor:pointer;">🥤 饮料</button>
+        <button class="cat-btn" data-cat="auto" onclick="switchCategory('auto')" style="padding:4px 10px;border-radius:8px;border:1px solid var(--border);background:rgba(0,212,255,0.06);color:var(--text-dim);font-size:12px;cursor:pointer;">✨ 自动</button>
       </div>
       <div class="topbar-right">
         <span><i class="fas fa-cloud-sun"></i> 26&deg;C</span>
@@ -194,6 +195,27 @@ body {
   </div>
 </div>
 <script>
+function switchCategory(cat) {
+  localStorage.setItem('category', cat);
+  document.querySelectorAll('.cat-btn').forEach(function(b) {
+    var on = b.getAttribute('data-cat') === cat;
+    b.classList.toggle('active', on);
+    b.style.color = on ? 'var(--primary)' : 'var(--text-dim)';
+    b.style.borderColor = on ? 'var(--primary)' : 'var(--border)';
+  });
+  if (window.loadDataset && window.location.pathname.indexOf('/dataset') === 0) {
+    window.loadDataset();
+  }
+}
+(function() {
+  var saved = localStorage.getItem('category') || 'apple';
+  document.querySelectorAll('.cat-btn').forEach(function(b) {
+    var on = b.getAttribute('data-cat') === saved;
+    b.classList.toggle('active', on);
+    b.style.color = on ? 'var(--primary)' : 'var(--text-dim)';
+    b.style.borderColor = on ? 'var(--primary)' : 'var(--border)';
+  });
+})();
 function updateClock() {
   var d = new Date();
   document.getElementById("headerTime").textContent = d.toLocaleTimeString("zh-CN", {hour12:false});

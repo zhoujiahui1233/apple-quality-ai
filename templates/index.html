@@ -132,10 +132,12 @@ function switchModel(m) {
   document.querySelector('.model-btn:nth-child(' + ({yolo:1,dl:2,rf:3,svm:4}[m] || 1) + ')').classList.add('active');
   var map = {yolo:'yolo_image', dl:'dl_image', rf:'rf_image', svm:'svm_image'};
   var key = map[m];
-  if (window.lastDetectData && window.lastDetectData[key]) {
-    document.getElementById('resultImage').src = window.lastDetectData[key] + '?t=' + Date.now();
+  var hasViz = !!(window.lastDetectData && window.lastDetectData[key]);
+  var src = hasViz ? window.lastDetectData[key] : (window.lastDetectData && window.lastDetectData.result_image);
+  if (src) {
+    document.getElementById('resultImage').src = src + '?t=' + Date.now();
   }
-  document.getElementById('streamStatus').innerHTML = '<i class="fas fa-exchange-alt"></i> ' + m.toUpperCase();
+  document.getElementById('streamStatus').innerHTML = '<i class="fas fa-exchange-alt"></i> ' + m.toUpperCase() + (hasViz ? '' : ' \u00b7 \u8be5\u54c1\u7c7b\u4ec5\u4e3b\u89c6\u56fe');
 }
 // Charts
 window.accChart = new Chart(document.getElementById('accChart'), {

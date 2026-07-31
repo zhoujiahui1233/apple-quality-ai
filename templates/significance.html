@@ -45,7 +45,11 @@
   <div style="font-size:12px;color:var(--text-dim);line-height:1.8;">
     <p>• <strong style="color:var(--primary);">McNemar 检验</strong>: 对同一批样本上两个模型的预测错误区别进行显著性检验，p &lt; 0.05 表示两模型性能差异显著。</p>
     <p>• <strong style="color:var(--accent);">Kappa 一致性</strong>: 检验机器分级与人工感官评价的一致性，&gt; 0.8 为优良一致。</p>
-    <p>• 数据来源: 实验集训练结果（现为示例数据）。</p>
+    <p>• 数据来源: 优先读取实验数据 output/experiment_results.json，无则显示示例数据。</p>
+  </div>
+  <div id="mcnemarWrap" style="display:none;margin-top:12px;">
+    <div style="font-size:13px;color:var(--primary);margin-bottom:8px;"><i class="fas fa-table"></i> McNemar 检验 p 值矩阵（p &lt; 0.05 表示两模型差异显著，标 ★）</div>
+    <table class="mcnemar-table" id="mcnemarTable"></table>
   </div>
 </div>
 
@@ -99,6 +103,37 @@ fetch("/api/stats/models").then(function(r) { return r.json(); }).then(function(
       plugins: { legend: { display: false } }
     }
   });
+
+  // 样本数提示
+  if (d.n) {
+    var nTxt = Object.keys(d.n).map(function(c) {
+      return ({apple:"苹果",bread:"面包",beverage:"饮料"}[c] || c) + ": " + d.n[c] + " 张";
+    }).join(" · ");
+    document.getElementById("note").textContent += "  [" + nTxt + "]";
+  }
+  // McNemar p 值矩阵
+  if (d.mcnemar && d.models) {
+    var mkeys = Object.keys(d.mcnemar);
+    if (mkeys.length) {
+      var cat = mkeys[0];
+      var mat = d.mcnemar[cat];
+      var ms = d.models.filter(function(m) { return m !== "pipeline"; });
+      var html = "<tr><th></th>" + ms.map(function(m) { return "<th>" + m.toUpperCase() + "</th>"; }).join("") + "</tr>";
+      ms.forEach(function(m, i) {
+        html += "<tr><th>" + m.toUpperCase() + "</th>";
+        ms.forEach(function(m2, j) {
+          if (i === j) { html += "<td>—</td>"; return; }
+          var pv = mat[i] ? mat[i][j] : null;
+          if (pv === null || pv === undefined) { html += "<td>—</td>"; return; }
+          var cls = pv < 0.05 ? "sig" : "non-sig";
+          html += "<td class='" + cls + "'>" + (pv < 0.001 ? pv.toExponential(1) : pv.toFixed(3)) + (pv < 0.05 ? " ★" : "") + "</td>";
+        });
+        html += "</tr>";
+      });
+      document.getElementById("mcnemarTable").innerHTML = html;
+      document.getElementById("mcnemarWrap").style.display = "block";
+    }
+  }
 });
 </script>
 {% endblock %}
