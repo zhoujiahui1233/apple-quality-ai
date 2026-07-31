@@ -64,7 +64,11 @@ app.config['MAX_CONTENT_LENGTH'] = 16 * 1024 * 1024  # 16MB
 db.init_app(app)
 
 from services.detection_service import DetectionService
+from services.dataset_service import DatasetService
+from services.model_registry import ModelRegistry
 detection_service = DetectionService()
+dataset_service = DatasetService()
+model_registry = ModelRegistry()
 
 ALLOWED_EXTENSIONS = {'.jpg', '.jpeg', '.png', '.bmp'}
 
@@ -346,39 +350,48 @@ def manifest_json():
 
 @app.route('/api/collect', methods=['POST'])
 def collect_image():
-    if "file" not in request.files:
-        return jsonify({"error": "?????"}), 400
-    file = request.files["file"]
-    category = request.form.get("category", "unlabeled")
-    if file.filename == "":
-        return jsonify({"error": "?????"}), 400
-    from datetime import datetime
-    dataset_dir = os.path.join(os.path.dirname(os.path.abspath(__file__)), "dataset_collected", category)
-    os.makedirs(dataset_dir, exist_ok=True)
-    ts = datetime.now().strftime("%Y%m%d_%H%M%S_%f")[:-3]
-    ext = os.path.splitext(file.filename)[1].lower() or ".jpg"
-    fname = category + "_" + ts + ext
-    path = os.path.join(dataset_dir, fname)
-    file.save(path)
-    logger.info("?????: [%s] %s", category, fname)
-    return jsonify({"success": True, "category": category, "filename": fname})
+    """保存图片到数据集，品类 + 标签"""
+    if 'file' not in request.files:
+        return jsonify({'error': '未找到图片'}), 400
+    file = request.files['file']
+    category = request.form.get('category', 'unlabeled')
+    label = request.form.get('label', 'unlabeled')
+    if file.filename == '':
+        return jsonify({'error': '文件名为空'}), 400
+    result = dataset_service.save(file, category, label)
+    logger.info("数据集收集: [%s/%s] %s", category, label, result.get("filename"))
+    return jsonify(result)
 
 
-@app.route("/api/dataset/list")
+@app.route('/api/dataset/list')
 def list_dataset():
-    dataset_dir = os.path.join(os.path.dirname(os.path.abspath(__file__)), "dataset_collected")
-    if not os.path.exists(dataset_dir):
-        return jsonify({"categories": {}, "total": 0})
-    result = {}
-    total = 0
-    for cat in sorted(os.listdir(dataset_dir)):
-        cat_dir = os.path.join(dataset_dir, cat)
-        if not os.path.isdir(cat_dir):
-            continue
-        images = sorted(os.listdir(cat_dir))
-        result[cat] = [f for f in images]
-        total += len(images)
-    return jsonify({"categories": result, "total": total})
+    """数据集列表: 品类 → 标签 → 图片"""
+    return jsonify(dataset_service.list())
+
+
+@app.route('/api/dataset/delete', methods=['POST'])
+def delete_dataset_item():
+    category = request.form.get('category', '')
+    label = request.form.get('label', '')
+    filename = request.form.get('filename', '')
+    if not (category and label and filename):
+        return jsonify({'error': '参数不完整'}), 400
+    ok = dataset_service.delete(category, label, filename)
+    return jsonify({'success': ok})
+
+
+@app.route('/api/models/history')
+def models_history():
+    return jsonify(model_registry.history())
+
+
+@app.route('/api/models/rollback', methods=['POST'])
+def models_rollback():
+    category = request.form.get('category', '')
+    model_type = request.form.get('model_type', '')
+    version = request.form.get('version', '')
+    ok = model_registry.rollback(category, model_type, version)
+    return jsonify({'success': ok})
 
 
 @app.route('/dataset_collected/<path:filename>')
