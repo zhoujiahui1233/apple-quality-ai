@@ -1,21 +1,56 @@
 {% extends "base.html" %}
 {% block title %}检测历史{% endblock %}
 {% block content %}
+<style>
+.batch-bar { display:flex; align-items:center; gap:10px; flex-wrap:wrap; padding:10px 14px; background:rgba(0,212,255,0.05); border:1px solid var(--border); border-radius:10px; margin-bottom:12px; font-size:13px; }
+.batch-bar select { background:rgba(10,16,30,0.9); color:var(--text); border:1px solid var(--border); border-radius:8px; padding:5px 8px; font-size:12px; }
+.batch-bar button { border-radius:8px; font-size:12px; padding:5px 12px; }
+.sel-count { color:var(--primary); font-weight:600; }
+</style>
+
 <div class="d-flex justify-content-between align-items-center mb-3">
-  <h4>📄 检测历史</h4>
+  <h4 style="color:var(--text);">📄 检测历史</h4>
   <div>
     <a href="/" class="btn btn-success btn-sm">☁ 新检测</a>
     <a href="/api/export/report" class="btn btn-sm" style="border:1px solid var(--primary);color:var(--primary);background:rgba(0,212,255,0.08);"><i class="fas fa-download"></i> 导出报告</a>
   </div>
 </div>
-<div class="card shadow-sm">
-  <div class="card-header">📋 历史记录</div>
-  <div class="card-body">
+
+{% if records %}
+<div class="batch-bar">
+  <label style="display:flex;align-items:center;gap:6px;cursor:pointer;margin:0;">
+    <input type="checkbox" id="checkAll" onchange="toggleAll(this)"> 全选
+  </label>
+  <span style="color:var(--text-dim);">已选 <span class="sel-count" id="selCount">0</span> 条</span>
+  <span style="flex:1;"></span>
+  <select id="batchGrade">
+    <option value="">改等级为…</option>
+    <option value="premium">优等</option>
+    <option value="standard">合格</option>
+    <option value="reject">不合格</option>
+  </select>
+  <button class="btn btn-sm" style="border:1px solid var(--accent);color:var(--accent);background:rgba(0,255,136,0.06);" onclick="batchUpdate('grade')">批量改等级</button>
+  <select id="batchCategory">
+    <option value="">改品类为…</option>
+    <option value="apple">苹果</option>
+    <option value="bread">面包</option>
+    <option value="beverage">饮料</option>
+  </select>
+  <button class="btn btn-sm" style="border:1px solid var(--warning);color:var(--warning);background:rgba(255,193,7,0.06);" onclick="batchUpdate('category')">批量改品类</button>
+  <button class="btn btn-sm btn-danger" onclick="batchDelete()"><i class="fas fa-trash"></i> 批量删除</button>
+</div>
+{% endif %}
+
+<div class="card shadow-sm" style="background:var(--bg-card);border:1px solid var(--border);backdrop-filter:blur(12px);">
+  <div class="card-header" style="background:rgba(0,212,255,0.06);border-bottom:1px solid var(--border);color:var(--text);">📋 历史记录</div>
+  <div class="card-body" style="color:var(--text);">
     {% if records %}
-    <table>
+    <table style="width:100%;font-size:13px;">
       <thead>
-        <tr>
+        <tr style="color:var(--text-dim);">
+          <th style="padding:8px;"><input type="checkbox" id="checkAllTop" onchange="toggleAll(this)"></th>
           <th>ID</th>
+          <th>品类</th>
           <th>等级</th>
           <th>缺陷占比</th>
           <th>缺陷数</th>
@@ -25,8 +60,10 @@
       </thead>
       <tbody>
         {% for r in records %}
-        <tr>
+        <tr style="border-top:1px solid rgba(0,212,255,0.08);">
+          <td style="padding:8px;"><input type="checkbox" class="row-check" value="{{ r.id }}" onchange="updateSelCount()"></td>
           <td>{{ r.id }}</td>
+          <td>{{ {"apple":"🍎 苹果","bread":"🍞 面包","beverage":"🥤 饮料"}.get(r.category, "—") }}</td>
           <td><strong>{{ r.grade }}</strong></td>
           <td>{{ "%.2f"|format(r.defect_ratio*100) }}%</td>
           <td>{{ r.defect_count }}</td>
@@ -53,5 +90,41 @@
 {% endif %}
 <script>
 function del(id){if(!confirm("确认删除这条记录？"))return;fetch("/delete/"+id,{method:"POST"}).then(function(r){return r.json();}).then(function(d){if(d.success)window.location.reload();else alert(d.error);}).catch(function(e){alert("删除失败");});}
+function toggleAll(box){
+  var checked = box.checked;
+  document.querySelectorAll('.row-check').forEach(function(c){ c.checked = checked; });
+  updateSelCount();
+}
+function updateSelCount(){
+  var n = document.querySelectorAll('.row-check:checked').length;
+  document.getElementById('selCount').textContent = n;
+}
+function getIds(){
+  return Array.from(document.querySelectorAll('.row-check:checked')).map(function(c){ return parseInt(c.value, 10); });
+}
+function batchDelete(){
+  var ids = getIds();
+  if(!ids.length){ alert('请先勾选要删除的记录'); return; }
+  if(!confirm('确认批量删除 ' + ids.length + ' 条记录？此操作不可恢复。')) return;
+  fetch('/api/records/batch_delete',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({ids:ids})})
+    .then(function(r){return r.json();}).then(function(d){
+      if(d.success){ alert('已删除 ' + d.deleted + ' 条记录'); window.location.reload(); }
+      else alert(d.error || '删除失败');
+    }).catch(function(e){ alert('删除失败: ' + e); });
+}
+function batchUpdate(field){
+  var ids = getIds();
+  if(!ids.length){ alert('请先勾选要修改的记录'); return; }
+  var val = document.getElementById(field === 'grade' ? 'batchGrade' : 'batchCategory').value;
+  if(!val){ alert('请选择要修改为的值'); return; }
+  var updates = {};
+  updates[field] = val;
+  if(!confirm('确认批量修改 ' + ids.length + ' 条记录？')) return;
+  fetch('/api/records/batch_update',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({ids:ids, updates:updates})})
+    .then(function(r){return r.json();}).then(function(d){
+      if(d.success){ alert('已修改 ' + d.updated + ' 条记录'); window.location.reload(); }
+      else alert(d.error || '修改失败');
+    }).catch(function(e){ alert('修改失败: ' + e); });
+}
 </script>
 {% endblock %}

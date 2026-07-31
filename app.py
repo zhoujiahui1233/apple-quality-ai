@@ -185,20 +185,128 @@ def delete(record_id):
         return jsonify({'error': str(e)}), 500
 
 
+def _grade_class(grade: str) -> str:
+    """等级字符串 -> premium/standard/reject（兼容中英文标签）"""
+    g = grade or ""
+    if "Premium" in g or "优等" in g:
+        return "premium"
+    if "Reject" in g or "不合格" in g:
+        return "reject"
+    return "standard"
+
+
+def _delete_record_files(record):
+    for fname in [record.filename, record.result_filename]:
+        if fname:
+            fpath = os.path.join(app.config['UPLOAD_FOLDER'], fname)
+            if os.path.exists(fpath):
+                try:
+                    os.remove(fpath)
+                except Exception:
+                    pass
+
+
+def _apply_record_filter(query, filt):
+    """按筛选条件筛选记录：category / grade / date_from / date_to"""
+    from datetime import timedelta
+    filt = filt or {}
+    category = filt.get("category")
+    if category:
+        query = query.filter(DetectionRecord.category == category)
+    grade = filt.get("grade")
+    if grade:
+        if grade == "premium":
+            query = query.filter(DetectionRecord.grade.contains("Premium"))
+        elif grade == "standard":
+            query = query.filter(DetectionRecord.grade.contains("Standard"))
+        elif grade == "reject":
+            query = query.filter(DetectionRecord.grade.contains("Reject"))
+    date_from = filt.get("date_from")
+    if date_from:
+        query = query.filter(DetectionRecord.created_at >= datetime.strptime(date_from, "%Y-%m-%d"))
+    date_to = filt.get("date_to")
+    if date_to:
+        query = query.filter(
+            DetectionRecord.created_at < datetime.strptime(date_to, "%Y-%m-%d") + timedelta(days=1))
+    return query
+
+
+def _select_records(data):
+    """支持 ids 或 filter 两种选择方式"""
+    ids = data.get("ids")
+    query = DetectionRecord.query
+    if ids:
+        query = query.filter(DetectionRecord.id.in_(ids))
+    else:
+        query = _apply_record_filter(query, data.get("filter"))
+    return query.all()
+
+
+@app.route('/api/records/count', methods=['POST'])
+def records_count():
+    """按筛选条件返回匹配记录数（用于批量管理前确认）"""
+    data = request.get_json(silent=True) or {}
+    query = _apply_record_filter(DetectionRecord.query, data.get("filter"))
+    return jsonify({"count": query.count()})
+
+
+@app.route('/api/records/batch_delete', methods=['POST'])
+def batch_delete():
+    data = request.get_json(silent=True) or {}
+    if not data.get("ids") and not data.get("filter"):
+        return jsonify({"error": "请提供 ids 或筛选条件"}), 400
+    records = _select_records(data)
+    n = len(records)
+    for r in records:
+        _delete_record_files(r)
+        db.session.delete(r)
+    db.session.commit()
+    return jsonify({"success": True, "deleted": n})
+
+
+@app.route('/api/records/batch_update', methods=['POST'])
+def batch_update():
+    data = request.get_json(silent=True) or {}
+    if not data.get("ids") and not data.get("filter"):
+        return jsonify({"error": "请提供 ids 或筛选条件"}), 400
+    updates = data.get("updates") or {}
+    grade = updates.get("grade")
+    category = updates.get("category")
+    if not grade and not category:
+        return jsonify({"error": "没有要更新的字段"}), 400
+    GRADE_MAP = {
+        "premium": "优等 Premium",
+        "standard": "合格 Standard",
+        "reject": "不合格 Reject",
+    }
+    records = _select_records(data)
+    n = len(records)
+    for r in records:
+        if grade:
+            r.grade = GRADE_MAP.get(grade, grade)
+        if category:
+            r.category = category
+    db.session.commit()
+    return jsonify({"success": True, "updated": n})
+
+
 @app.route('/stats')
 def stats_page():
     return render_template('stats.html', active_tab='stats')
 
+
+@app.route('/api/stats')
 def stats():
-    total = DetectionRecord.query.count()
-    premium = DetectionRecord.query.filter(DetectionRecord.grade.contains('Premium')).count()
-    standard = DetectionRecord.query.filter(DetectionRecord.grade.contains('Standard')).count()
-    reject = DetectionRecord.query.filter(DetectionRecord.grade.contains('Reject')).count()
+    records = DetectionRecord.query.all()
+    total = len(records)
+    counts = {"premium": 0, "standard": 0, "reject": 0}
+    for r in records:
+        counts[_grade_class(r.grade)] += 1
     return jsonify({
         'total': total,
-        'premium': premium,
-        'standard': standard,
-        'reject': reject,
+        'premium': counts["premium"],
+        'standard': counts["standard"],
+        'reject': counts["reject"],
     })
 
 
@@ -220,9 +328,10 @@ def stats_daily():
         key = r.created_at.date().isoformat()
         if key in daily:
             daily[key]['total'] += 1
-            if 'Premium' in (r.grade or ''):
+            cls = _grade_class(r.grade)
+            if cls == "premium":
                 daily[key]['premium'] += 1
-            elif 'Reject' in (r.grade or ''):
+            elif cls == "reject":
                 daily[key]['reject'] += 1
             else:
                 daily[key]['standard'] += 1

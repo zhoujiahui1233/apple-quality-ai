@@ -50,6 +50,74 @@
   </div>
 </div>
 
+
+<div class="glass-card p-3 mt-3">
+  <div style="font-size:13px;color:var(--text-dim);margin-bottom:12px;"><i class="fas fa-tasks"></i> 数据批量管理（按条件选中记录，可批量删除或改等级/品类）</div>
+  <div style="display:flex;gap:10px;flex-wrap:wrap;align-items:center;font-size:12px;">
+    <select id="mgCat" class="mg-sel"><option value="">全部品类</option><option value="apple">🍎 苹果</option><option value="bread">🍞 面包</option><option value="beverage">🥤 饮料</option></select>
+    <select id="mgGrade" class="mg-sel"><option value="">全部等级</option><option value="premium">优等</option><option value="standard">合格</option><option value="reject">不合格</option></select>
+    <span style="color:var(--text-dim);">日期:</span>
+    <input type="date" id="mgFrom" class="mg-sel">
+    <span style="color:var(--text-dim);">至</span>
+    <input type="date" id="mgTo" class="mg-sel">
+    <button class="btn btn-sm" style="border:1px solid var(--primary);color:var(--primary);background:rgba(0,212,255,0.08);" onclick="mgCount()"><i class="fas fa-search"></i> 查询数量</button>
+    <span style="color:var(--text-dim);">匹配 <span id="mgCountNum" style="color:var(--accent);font-weight:700;">--</span> 条</span>
+    <span style="flex:1;"></span>
+    <select id="mgNewGrade" class="mg-sel"><option value="">改等级为…</option><option value="premium">优等</option><option value="standard">合格</option><option value="reject">不合格</option></select>
+    <button class="btn btn-sm" style="border:1px solid var(--accent);color:var(--accent);background:rgba(0,255,136,0.06);" onclick="mgUpdate('grade')">批量改等级</button>
+    <select id="mgNewCat" class="mg-sel"><option value="">改品类为…</option><option value="apple">苹果</option><option value="bread">面包</option><option value="beverage">饮料</option></select>
+    <button class="btn btn-sm" style="border:1px solid var(--warning);color:var(--warning);background:rgba(255,193,7,0.06);" onclick="mgUpdate('category')">批量改品类</button>
+    <button class="btn btn-sm btn-danger" onclick="mgDelete()"><i class="fas fa-trash"></i> 批量删除</button>
+  </div>
+</div>
+<style>
+.mg-sel { background:rgba(10,16,30,0.9); color:var(--text); border:1px solid var(--border); border-radius:8px; padding:5px 8px; font-size:12px; }
+.mg-sel::-webkit-calendar-picker-indicator { filter: invert(1); opacity:0.6; }
+</style>
+<script>
+function mgFilter() {
+  var f = {};
+  var cat = document.getElementById('mgCat').value;
+  var grade = document.getElementById('mgGrade').value;
+  var frm = document.getElementById('mgFrom').value;
+  var to = document.getElementById('mgTo').value;
+  if (cat) f.category = cat;
+  if (grade) f.grade = grade;
+  if (frm) f.date_from = frm;
+  if (to) f.date_to = to;
+  return f;
+}
+function mgCount() {
+  fetch('/api/records/count', {method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({filter: mgFilter()})})
+    .then(function(r){ return r.json(); }).then(function(d){ document.getElementById('mgCountNum').textContent = d.count; })
+    .catch(function(){ alert('查询失败'); });
+}
+function mgDelete() {
+  var n = document.getElementById('mgCountNum').textContent;
+  if (n === '--' || parseInt(n) <= 0) { alert('请先点击“查询数量”确认要删除的记录数'); return; }
+  if (!confirm('确认删除匹配的 ' + n + ' 条记录？此操作不可恢复。')) return;
+  fetch('/api/records/batch_delete', {method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({filter: mgFilter()})})
+    .then(function(r){ return r.json(); }).then(function(d){
+      if (d.success) { alert('已删除 ' + d.deleted + ' 条'); window.location.reload(); }
+      else alert(d.error || '删除失败');
+    }).catch(function(e){ alert('删除失败: ' + e); });
+}
+function mgUpdate(field) {
+  var sel = field === 'grade' ? 'mgNewGrade' : 'mgNewCat';
+  var val = document.getElementById(sel).value;
+  if (!val) { alert('请选择要修改为的值'); return; }
+  var n = document.getElementById('mgCountNum').textContent;
+  if (n === '--' || parseInt(n) <= 0) { alert('请先点击“查询数量”确认匹配记录'); return; }
+  var updates = {}; updates[field] = val;
+  if (!confirm('确认批量修改匹配的 ' + n + ' 条记录？')) return;
+  fetch('/api/records/batch_update', {method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({filter: mgFilter(), updates: updates})})
+    .then(function(r){ return r.json(); }).then(function(d){
+      if (d.success) { alert('已修改 ' + d.updated + ' 条'); window.location.reload(); }
+      else alert(d.error || '修改失败');
+    }).catch(function(e){ alert('修改失败: ' + e); });
+}
+</script>
+
 <script>
 fetch('/api/stats').then(function(r) { return r.json(); }).then(function(d) {
   var total = d.total || 0;
