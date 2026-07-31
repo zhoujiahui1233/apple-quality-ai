@@ -258,7 +258,7 @@ def records_count():
 @app.route('/api/records/batch_delete', methods=['POST'])
 def batch_delete():
     data = request.get_json(silent=True) or {}
-    if not data.get("ids") and not data.get("filter"):
+    if not data.get("ids") and not data.get("filter") and not data.get("delete_all"):
         return jsonify({"error": "请提供 ids 或筛选条件"}), 400
     records = _select_records(data)
     n = len(records)

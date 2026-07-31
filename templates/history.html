@@ -47,6 +47,7 @@
   </select>
   <button class="btn btn-sm" style="border:1px solid var(--warning);color:var(--warning);background:rgba(255,193,7,0.06);" onclick="batchUpdate('category')">批量改品类</button>
   <button class="btn btn-sm btn-danger" onclick="batchDelete()"><i class="fas fa-trash"></i> 批量删除</button>
+  <button class="btn btn-sm" style="border:1px solid var(--danger);color:#ff6b81;background:rgba(255,71,87,0.06);" onclick="deleteAll()"><i class="fas fa-trash-alt"></i> 全部删除</button>
 </div>
 {% endif %}
 
@@ -122,6 +123,19 @@ function updateSelCount(){
 function getIds(){
   return Array.from(document.querySelectorAll('.row-check:checked')).map(function(c){ return parseInt(c.value, 10); });
 }
+function deleteAll(){
+  var cat = document.getElementById('pageCat').value || '';
+  var catName = cat === 'apple' ? '苹果' : (cat === 'bread' ? '面包' : (cat === 'beverage' ? '饮料' : '全部品类'));
+  if(!confirm('确认删除「' + catName + '」的所有检测记录？此操作不可恢复！')) return;
+  var body = {delete_all: true};
+  if (cat) body.filter = {category: cat};
+  fetch('/api/records/batch_delete',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)})
+    .then(function(r){return r.json();}).then(function(d){
+      if(d.success){ alert('已删除 ' + d.deleted + ' 条记录'); window.location.reload(); }
+      else alert(d.error || '删除失败');
+    }).catch(function(e){ alert('删除失败: ' + e); });
+}
+
 function batchDelete(){
   var ids = getIds();
   if(!ids.length){ alert('请先勾选要删除的记录'); return; }
