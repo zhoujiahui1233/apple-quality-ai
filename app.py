@@ -404,6 +404,30 @@ def dataset_file(filename):
 def dataset_page():
     return render_template("dataset.html", active_tab="dataset")
 
+
+
+@app.route('/significance')
+def significance():
+    return render_template('significance.html', active_tab='significance')
+
+
+@app.route('/api/stats/models')
+def stats_models():
+    """四模型 x 三品类 准确率矩阵（真实数据接训练结果）"""
+    from services.stats_service import model_comparison_table
+    # 预设四模型，带空数据冗余；未来接实验数据
+    return jsonify({
+        "categories": ["apple", "bread", "beverage"],
+        "models": ["svm", "rf", "dl", "yolo"],
+        "accuracy": {
+            "apple": {"svm": 99.3, "rf": 98.6, "dl": 97.1, "yolo": 99.8},
+            "bread": {"svm": 91.5, "rf": 92.0, "dl": 93.2, "yolo": 94.1},
+            "beverage": {"svm": 88.3, "rf": 89.0, "dl": 90.4, "yolo": 91.2},
+        },
+        "note": "示例数据，请用实验结果替换"
+    })
+
+
 if __name__ == '__main__':
     logging.basicConfig(
         level=getattr(logging, config.LOG_LEVEL),

@@ -1,0 +1,104 @@
+{% extends "base.html" %}
+{% block title %}显著性分析{% endblock %}
+{% block content %}
+<style>
+.stat-card { padding: 18px; border-radius: 12px; background: var(--bg-card); border: 1px solid var(--border); }
+.stat-card .n { font-size: 28px; font-weight: 700; font-family: "Inter", monospace; }
+.stat-card .l { font-size: 12px; color: var(--text-dim); margin-top: 4px; }
+.chart-wrap { position: relative; height: 280px; width: 100%; }
+.mcnemar-table { width: 100%; font-size: 12px; border-collapse: collapse; }
+.mcnemar-table th, .mcnemar-table td { padding: 8px 10px; text-align: center; border: 1px solid var(--border); }
+.mcnemar-table th { background: rgba(0,212,255,0.08); color: var(--primary); }
+.sig { color: var(--accent); font-weight: 700; }
+.non-sig { color: var(--text-dim); }
+</style>
+
+<div class="d-flex justify-content-between align-items-center mb-3">
+  <h4 style="color:var(--text);font-weight:600;"><i class="fas fa-chart-bar"></i> 显著性分析</h4>
+  <span style="color:var(--text-dim);font-size:12px;" id="note"></span>
+</div>
+
+<div class="row g-3 mb-3">
+  <div class="col-3"><div class="stat-card text-center"><div class="n" style="color:var(--primary);">4</div><div class="l">检测模型</div></div></div>
+  <div class="col-3"><div class="stat-card text-center"><div class="n" style="color:var(--accent);">3</div><div class="l">食品品类</div></div></div>
+  <div class="col-3"><div class="stat-card text-center"><div class="n" style="color:var(--warning);">2</div><div class="l">统计检验</div></div></div>
+  <div class="col-3"><div class="stat-card text-center"><div class="n" style="color:var(--danger);">3级</div><div class="l">品质分级</div></div></div>
+</div>
+
+<div class="row g-3">
+  <div class="col-lg-8">
+    <div class="glass-card p-3">
+      <div style="font-size:13px;color:var(--text-dim);margin-bottom:12px;"><i class="fas fa-chart-column"></i> 四模型 × 三品类 准确率对比</div>
+      <div class="chart-wrap"><canvas id="modelChart"></canvas></div>
+    </div>
+  </div>
+  <div class="col-lg-4">
+    <div class="glass-card p-3">
+      <div style="font-size:13px;color:var(--text-dim);margin-bottom:12px;"><i class="fas fa-square-poll-vertical"></i> 综合准确率</div>
+      <div class="chart-wrap" style="height:280px;"><canvas id="avgChart"></canvas></div>
+    </div>
+  </div>
+</div>
+
+<div class="glass-card p-3 mt-3">
+  <div style="font-size:13px;color:var(--text-dim);margin-bottom:12px;"><i class="fas fa-flask"></i> McNemar 检验说明</div>
+  <div style="font-size:12px;color:var(--text-dim);line-height:1.8;">
+    <p>• <strong style="color:var(--primary);">McNemar 检验</strong>: 对同一批样本上两个模型的预测错误区别进行显著性检验，p &lt; 0.05 表示两模型性能差异显著。</p>
+    <p>• <strong style="color:var(--accent);">Kappa 一致性</strong>: 检验机器分级与人工感官评价的一致性，&gt; 0.8 为优良一致。</p>
+    <p>• 数据来源: 实验集训练结果（现为示例数据）。</p>
+  </div>
+</div>
+
+<script>
+fetch("/api/stats/models").then(function(r) { return r.json(); }).then(function(d) {
+  document.getElementById("note").textContent = d.note || "";
+  var cats = d.categories || [];
+  var models = d.models || [];
+  var acc = d.accuracy || {};
+
+  var colors = ["rgba(139,69,19,0.8)", "rgba(0,120,0,0.8)", "rgba(0,0,180,0.8)", "rgba(150,0,150,0.8)"];
+
+  // Grouped bar chart
+  new Chart(document.getElementById("modelChart"), {
+    type: "bar",
+    data: {
+      labels: cats.map(function(c) { return {apple:"苹果",bread:"面包",beverage:"饮料"}[c] || c; }),
+      datasets: models.map(function(m, i) {
+        return {
+          label: m.toUpperCase(),
+          data: cats.map(function(c) { return acc[c] ? acc[c][m] || 0 : 0; }),
+          backgroundColor: colors[i],
+          borderRadius: 4
+        };
+      })
+    },
+    options: {
+      responsive: true, maintainAspectRatio: false,
+      scales: { y: { beginAtZero: true, max: 100, grid: { color: "rgba(0,212,255,0.06)" }, ticks: { color: "#8899bb" } },
+                x: { grid: { display: false }, ticks: { color: "#8899bb" } } },
+      plugins: { legend: { labels: { color: "#8899bb", font: { size: 11 } } },
+                 tooltip: { callbacks: { label: function(c) { return c.dataset.label + ": " + c.raw + "%"; } } } }
+    }
+  });
+
+  // Avg accuracy bar
+  var avgs = models.map(function(m) {
+    var vals = cats.map(function(c) { return acc[c] ? acc[c][m] || 0 : 0; });
+    return vals.reduce(function(a, b) { return a + b; }, 0) / vals.length;
+  });
+  new Chart(document.getElementById("avgChart"), {
+    type: "bar",
+    data: {
+      labels: models.map(function(m) { return m.toUpperCase(); }),
+      datasets: [{ label: "平均准确率 %", data: avgs, backgroundColor: colors, borderRadius: 4 }]
+    },
+    options: {
+      indexAxis: "y", responsive: true, maintainAspectRatio: false,
+      scales: { x: { beginAtZero: true, max: 100, grid: { color: "rgba(0,212,255,0.06)" }, ticks: { color: "#8899bb" } },
+                y: { grid: { display: false }, ticks: { color: "#8899bb" } } },
+      plugins: { legend: { display: false } }
+    }
+  });
+});
+</script>
+{% endblock %}
