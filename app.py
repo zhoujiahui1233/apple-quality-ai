@@ -136,15 +136,18 @@ def history():
     page = request.args.get('page', 1, type=int)
     per_page = 12
     grade_filter = request.args.get('grade', '')
+    category = request.args.get('category', '')
 
     query = DetectionRecord.query.order_by(DetectionRecord.created_at.desc())
+    if category:
+        query = query.filter(DetectionRecord.category == category)
     if grade_filter:
         query = query.filter(DetectionRecord.grade.contains(grade_filter))
 
     pagination = query.paginate(page=page, per_page=per_page, error_out=False)
     records = pagination.items
 
-    return render_template('history.html', active_tab='history', records=records, pagination=pagination, grade_filter=grade_filter)
+    return render_template('history.html', active_tab='history', records=records, pagination=pagination, grade_filter=grade_filter, category=category)
     page = request.args.get('page', 1, type=int)
     per_page = 12
     grade_filter = request.args.get('grade', '')
@@ -297,7 +300,11 @@ def stats_page():
 
 @app.route('/api/stats')
 def stats():
-    records = DetectionRecord.query.all()
+    category = request.args.get('category', '')
+    query = DetectionRecord.query
+    if category:
+        query = query.filter(DetectionRecord.category == category)
+    records = query.all()
     total = len(records)
     counts = {"premium": 0, "standard": 0, "reject": 0}
     for r in records:
@@ -317,13 +324,18 @@ def stats_daily():
     from models import DetectionRecord
     import collections
     days = request.args.get('days', 7, type=int)
+    category = request.args.get('category', '')
     today = datetime.utcnow().date()
     daily = collections.OrderedDict()
     for i in range(days - 1, -1, -1):
         d = today - timedelta(days=i)
         key = d.isoformat()
         daily[key] = {'total': 0, 'premium': 0, 'standard': 0, 'reject': 0}
-    records = DetectionRecord.query.filter(DetectionRecord.created_at >= (today - timedelta(days=days-1))).all()
+    query = DetectionRecord.query.filter(
+        DetectionRecord.created_at >= (today - timedelta(days=days-1)))
+    if category:
+        query = query.filter(DetectionRecord.category == category)
+    records = query.all()
     for r in records:
         key = r.created_at.date().isoformat()
         if key in daily:
@@ -493,8 +505,13 @@ def collect_image():
 
 @app.route('/api/dataset/list')
 def list_dataset():
-    """数据集列表: 品类 → 标签 → 图片"""
-    return jsonify(dataset_service.list())
+    """数据集列表: 品类 → 标签 → 图片（可按 category 过滤）"""
+    category = request.args.get('category', '')
+    data = dataset_service.list()
+    if category and category in data.get("categories", {}):
+        data = {"categories": {category: data["categories"][category]},
+                "total": sum(len(v) for v in data["categories"][category].values())}
+    return jsonify(data)
 
 
 @app.route('/api/dataset/delete', methods=['POST'])

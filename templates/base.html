@@ -203,7 +203,12 @@ function switchCategory(cat) {
     b.style.color = on ? 'var(--primary)' : 'var(--text-dim)';
     b.style.borderColor = on ? 'var(--primary)' : 'var(--border)';
   });
-  if (window.loadDataset && window.location.pathname.indexOf('/dataset') === 0) {
+  var p = window.location.pathname;
+  if (p.indexOf('/history') === 0) {
+    window.location.href = '/history?category=' + cat;
+  } else if (p.indexOf('/stats') === 0) {
+    window.location.reload();
+  } else if (p.indexOf('/dataset') === 0 && window.loadDataset) {
     window.loadDataset();
   }
 }
