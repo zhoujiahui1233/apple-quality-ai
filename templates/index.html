@@ -54,8 +54,8 @@
                 <div id="saveToDatasetBar" class="d-none" style="position:absolute;bottom:48px;left:12px;right:12px;z-index:3;pointer-events:auto;background:rgba(10,18,34,0.88);backdrop-filter:blur(12px);border:1px solid var(--border);border-radius:10px;padding:10px 12px;">
           <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap;">
             <span style="font-size:12px;color:var(--text-dim);">标签:</span>
-            <label style="font-size:12px;color:var(--text);cursor:pointer;"><input type="radio" name="dsLabel" value="合格" checked style="accent-color:var(--accent);" onchange="updateDefectType()"> 合格</label>
-            <label style="font-size:12px;color:var(--text);cursor:pointer;"><input type="radio" name="dsLabel" value="不合格" style="accent-color:var(--danger);" onchange="updateDefectType()"> 不合格</label>
+            <label style="font-size:12px;color:var(--text);cursor:pointer;"><input type="radio" name="dsLabel" value="合格" checked style="accent-color:var(--accent);" onchange="onDsLabelChange()"> 合格</label>
+            <label style="font-size:12px;color:var(--text);cursor:pointer;"><input type="radio" name="dsLabel" value="不合格" style="accent-color:var(--danger);" onchange="onDsLabelChange()"> 不合格</label>
             <select id="defectType" style="display:none;padding:4px 8px;border-radius:6px;border:1px solid var(--border);background:rgba(0,0,0,0.7);color:var(--text);font-size:12px;">
               <option value="">缺陷类型</option>
               <option value="碰伤">碰伤</option>
@@ -67,9 +67,10 @@
             </select>
             <button onclick="toggleSmartPanel()" style="padding:5px 10px;border-radius:8px;border:1px solid var(--primary);background:rgba(0,212,255,0.1);color:var(--primary);font-size:12px;cursor:pointer;"><i class="fas fa-sliders-h"></i> 智能选项</button>
             <button onclick="smartPreview()" style="padding:5px 10px;border-radius:8px;border:1px solid var(--primary);background:rgba(0,212,255,0.15);color:var(--primary);font-size:12px;cursor:pointer;"><i class="fas fa-search"></i> 智能分析</button>
-            <button onclick="cropSaveToDataset()" style="padding:5px 14px;border-radius:8px;border:1px solid var(--warning);background:rgba(255,193,7,0.12);color:var(--warning);font-size:12px;white-space:nowrap;cursor:pointer;"><i class="fas fa-crop-alt"></i> 框选重检</button>
+            <button onclick="enterCropMode()" style="padding:5px 14px;border-radius:8px;border:1px solid var(--warning);background:rgba(255,193,7,0.12);color:var(--warning);font-size:12px;white-space:nowrap;cursor:pointer;"><i class="fas fa-crop-alt"></i> 框选重检</button>
             <button onclick="saveToDataset()" style="padding:5px 14px;border-radius:8px;border:1px solid var(--accent);background:rgba(0,255,136,0.15);color:var(--accent);font-size:12px;white-space:nowrap;cursor:pointer;"><i class="fas fa-save"></i> 保存到数据集</button>
           </div>
+                    <div style="font-size:11px;color:var(--text-dim);margin-top:6px;line-height:1.5;"><i class="fas fa-sync-alt"></i> 提示：保存前若手动修改了「合格/不合格」标签，保存后会同步修正本条历史记录的等级。</div>
           <div id="smartPanel" style="display:none;margin-top:8px;padding-top:8px;border-top:1px solid var(--border);gap:14px;flex-wrap:wrap;font-size:12px;color:var(--text-dim);">
             <label style="cursor:pointer;"><input type="checkbox" id="optCrop" checked style="accent-color:var(--primary);"> 自动裁剪主体(去背景)</label>
             <label style="cursor:pointer;"><input type="checkbox" id="optQuality" checked style="accent-color:var(--primary);"> 质量检查(模糊/曝光)</label>
@@ -159,6 +160,11 @@ function switchModel(m) {
   var src = hasViz ? window.lastDetectData[key] : (window.lastDetectData && window.lastDetectData.result_image);
   if (src) {
     document.getElementById('resultImage').src = src + '?t=' + Date.now();
+    if (cropState.mode && cropState.canvas) {
+      var cimg = new Image();
+      cimg.onload = function() { cropState.img = cimg; _cropDraw(); };
+      cimg.src = src + '?t=' + Date.now();
+    }
   }
   document.getElementById('streamStatus').innerHTML = '<i class="fas fa-exchange-alt"></i> ' + m.toUpperCase() + (hasViz ? '' : ' \u00b7 \u8be5\u54c1\u7c7b\u4ec5\u4e3b\u89c6\u56fe');
 }
@@ -289,6 +295,7 @@ function up(f) {
     if (!t.ok) { alert(t.data.error || '\u68c0\u6d4b\u5931\u8d25'); return; }
     var d = t.data;
     window.lastDetectData = d;
+    window.dsLabelEdited = false;
     var _g = d.grade || '';
     var _isBad = _g.indexOf('Reject') >= 0 || _g.indexOf('\u4e0d\u5408\u683c') >= 0;
     var _rb = document.querySelector('input[name="dsLabel"][value="' + (_isBad ? '\u4e0d\u5408\u683c' : '\u5408\u683c') + '"]');
@@ -358,6 +365,10 @@ function toggleSmartPanel() {
   var p = document.getElementById('smartPanel');
   p.style.display = p.style.display === 'none' ? 'flex' : 'none';
 }
+function onDsLabelChange() {
+  window.dsLabelEdited = true;
+  updateDefectType();
+}
 function updateDefectType() {
   var dt = document.getElementById('defectType');
   var rb = document.querySelector('input[name="dsLabel"]:checked');
@@ -419,6 +430,7 @@ function saveToDataset() {
     fd.append('file', blob, 'capture_' + Date.now() + '.jpg');
     fd.append('category', catId);
     fd.append('label', cat);
+    if (window.dsLabelEdited && window.lastDetectData.id) { fd.append('record_id', window.lastDetectData.id); }
     if (cat === '\u4e0d\u5408\u683c' && defectType) { fd.append('defect_type', defectType); }
     fd.append('options', JSON.stringify(collectOptions()));
     return fetch('/api/collect', { method: 'POST', body: fd });
@@ -431,6 +443,7 @@ function saveToDataset() {
       if (t.data.report && t.data.report.augment && t.data.report.augment.length) {
         msg += ' (\u542b\u589e\u5f3a ' + t.data.report.augment.length + ' \u5f20)';
       }
+      if (t.data.history_updated) { msg += '\uff0c\u5df2\u540c\u6b65\u4fee\u6b63\u5386\u53f2\u8bb0\u5f55'; }
       btn.innerHTML = '<i class="fas fa-check"></i> ' + msg;
       setTimeout(function() { btn.innerHTML = orig; }, 2500);
       if (t.data.report && t.data.report.quality && !t.data.report.quality.ok) {
@@ -448,7 +461,7 @@ function _cropCanvas() {
   if (cropState.canvas) return cropState.canvas;
   var c = document.createElement('canvas');
   c.id = 'cropCanvas';
-  c.style.cssText = 'position:absolute;inset:0;width:100%;height:100%;cursor:crosshair;z-index:5;touch-action:none;display:none;';
+  c.style.cssText = 'position:absolute;inset:0;width:100%;height:100%;cursor:crosshair;z-index:1;touch-action:none;display:none;';
   document.getElementById('streamContainer').appendChild(c);
   cropState.canvas = c;
   cropState.ctx = c.getContext('2d');
@@ -567,40 +580,50 @@ function _cropBlob(cb) {
   out.toBlob(cb, 'image/jpeg', 0.92);
 }
 function cropRedetect() {
-  if (!cropState.rect) return;
+  if (!cropState.rect) { alert('\u8bf7\u5148\u62d6\u52a8\u62d3\u62f3\u9009\u62e9\u8981\u91cd\u68c0\u7684\u533a\u57df'); return; }
   _cropBlob(function(blob) {
     exitCropMode();
     up(new File([blob], 'crop.jpg', {type: 'image/jpeg'}));
   });
 }
 function cropSaveToDataset() {
-  if (!cropState.rect) return;
+  if (!cropState.rect) { alert('\u8bf7\u5148\u5728\u56fe\u7247\u4e0a\u62d6\u52a8\u62d3\u62f3\u9009\u533a\uff0c\u518d\u70b9\u51fb\u201c\u4fdd\u5b58\u9009\u533a\u201d'); return; }
   var btn = document.getElementById('cropSaveBtn');
   var orig = btn.innerHTML;
   btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> \u4fdd\u5b58\u4e2d...';
-  _cropBlob(function(blob) {
-    var fd = new FormData();
-    fd.append('file', blob, 'crop_' + Date.now() + '.jpg');
-    fd.append('category', localStorage.getItem('category') || 'apple');
-    var rb = document.querySelector('input[name="dsLabel"]:checked');
-    var lab = rb ? rb.value : '\u5408\u683c';
-    fd.append('label', lab);
-    var dt = document.getElementById('defectType');
-    if (lab === '\u4e0d\u5408\u683c' && dt && dt.value) fd.append('defect_type', dt.value);
-    fd.append('options', JSON.stringify(collectOptions()));
-    fetch('/api/collect', {method: 'POST', body: fd})
-      .then(function(r) { return r.json(); })
-      .then(function(d) {
-        btn.innerHTML = orig;
-        if (d.success) {
-          var n = (d.files || []).length;
-          btn.innerHTML = '<i class="fas fa-check"></i> \u5df2\u4fdd\u5b58 ' + n + ' \u5f20';
-          setTimeout(function() { btn.innerHTML = orig; }, 2000);
-        } else { alert(d.error || '\u4fdd\u5b58\u5931\u8d25'); }
-      })
-      .catch(function(e) { btn.innerHTML = orig; alert('\u4fdd\u5b58\u5931\u8d25: ' + e.message); });
-  });
+  try {
+    _cropBlob(function(blob) {
+      if (!blob) { btn.innerHTML = orig; alert('\u88c1\u526a\u751f\u6210\u5931\u8d25\uff0c\u8bf7\u91cd\u65b0\u62d6\u52a8\u9009\u533a'); return; }
+      var fd = new FormData();
+      fd.append('file', blob, 'crop_' + Date.now() + '.jpg');
+      fd.append('category', localStorage.getItem('category') || 'apple');
+      var rb = document.querySelector('input[name="dsLabel"]:checked');
+      var lab = rb ? rb.value : '\u5408\u683c';
+      fd.append('label', lab);
+      var dt = document.getElementById('defectType');
+      if (lab === '\u4e0d\u5408\u683c' && dt && dt.value) fd.append('defect_type', dt.value);
+      if (window.dsLabelEdited && window.lastDetectData && window.lastDetectData.id) { fd.append('record_id', window.lastDetectData.id); }
+      var opts = collectOptions();
+      opts.crop = false;
+      fd.append('options', JSON.stringify(opts));
+      fetch('/api/collect', {method: 'POST', body: fd})
+        .then(function(r) { return r.json(); })
+        .then(function(d) {
+          btn.innerHTML = orig;
+          if (d.success) {
+            var n = (d.files || []).length;
+            var msg = '\u5df2\u4fdd\u5b58 ' + n + ' \u5f20\u5230\u6570\u636e\u96c6: ' + d.category + '/' + d.label;
+            if (d.history_updated) { msg += '\uff0c\u5e76\u5df2\u540c\u6b65\u4fee\u6b63\u5386\u53f2\u7b49\u7ea7'; }
+            btn.innerHTML = '<i class="fas fa-check"></i> ' + msg;
+            setTimeout(function() { btn.innerHTML = orig; }, 4000);
+          } else { alert(d.error || '\u4fdd\u5b58\u5931\u8d25'); }
+        })
+        .catch(function(e) { btn.innerHTML = orig; alert('\u4fdd\u5b58\u5931\u8d25: ' + e.message); });
+    });
+  } catch (err) {
+    btn.innerHTML = orig;
+    alert('\u4fdd\u5b58\u5931\u8d25: ' + err.message);
+  }
 }
-
 </script>
 {% endblock %}

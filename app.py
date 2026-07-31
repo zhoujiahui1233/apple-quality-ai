@@ -203,6 +203,17 @@ def _grade_class(grade: str) -> str:
     return "standard"
 
 
+def _corrected_grade(old_grade: str, label: str):
+    """\u4fdd\u5b58\u5230\u6570\u636e\u96c6\u65f6\uff0c\u6839\u636e\u624b\u52a8\u4fee\u6b63\u7684\u6807\u7b7e\u540c\u6b65\u4fee\u6b63\u5386\u53f2\u8bb0\u5f55\u7684\u7b49\u7ea7\u4e0e\u989c\u8272\uff08\u517c\u5bb9\u4e2d\u82f1\u6587\u683c\u5f0f\uff09"""
+    label = (label or '').strip()
+    if label not in ('\u5408\u683c', '\u4e0d\u5408\u683c'):
+        return None, None
+    has_en = old_grade and any(k in old_grade for k in ('Premium', 'Standard', 'Reject'))
+    if label == '\u5408\u683c':
+        return ('\u5408\u683c Standard' if has_en else '\u5408\u683c'), '(0, 200, 0)'
+    return ('\u4e0d\u5408\u683c Reject' if has_en else '\u4e0d\u5408\u683c'), '(0, 0, 255)'
+
+
 def _delete_record_files(record):
     """删除记录关联的所有图片文件（原图/结果图/四模型可视化/YOLO检测图）"""
     names = []
@@ -616,6 +627,7 @@ def collect_image():
     category = request.form.get('category', 'unlabeled')
     label = request.form.get('label', 'unlabeled')
     defect_type = request.form.get('defect_type', '')
+    record_id = request.form.get('record_id', type=int)
     try:
         opts = json.loads(request.form.get('options', '{}') or '{}')
     except Exception:
@@ -680,9 +692,21 @@ def collect_image():
         report['augment'] = aug_files
         saved.extend(aug_files)
 
+    history_updated = False
+    if record_id:
+        rec = db.session.get(DetectionRecord, record_id)
+        if rec is not None:
+            new_grade, new_color = _corrected_grade(rec.grade, label)
+            if new_grade:
+                rec.grade = new_grade
+                rec.grade_color = new_color
+                db.session.commit()
+                history_updated = True
+
     logger.info("\u6570\u636e\u96c6\u6536\u96c6: [%s/%s] %s", category, label, saved)
     return jsonify({'success': True, 'category': category, 'label': label,
-                    'files': saved, 'report': report})
+                    'files': saved, 'report': report,
+                    'history_updated': history_updated})
 
 @app.route('/api/dataset/list')
 def list_dataset():
@@ -792,8 +816,13 @@ def api_retrain():
     data = request.get_json(silent=True) or {}
     category = data.get('category', 'apple')
     models = data.get('models', ['svm', 'rf'])
+    epochs = int(data.get('epochs', 15) or 15)
     if _retrain_thread and _retrain_thread.is_alive():
-        return jsonify({'error': '已有训练任务在运行'}), 409
+        return jsonify({'error': '已有任务在运行'}), 409
+    allowed = {'svm', 'rf', 'dl', 'yolo'}
+    bad = [m for m in models if m not in allowed]
+    if bad:
+        return jsonify({'error': '不支持的模型: ' + ','.join(bad)}), 400
     status_file = config.INSTANCE_DIR / 'retrain_status.json'
     status = {'running': True, 'log': [], 'results': None, 'error': None}
     status_file.write_text(json.dumps(status, ensure_ascii=False), encoding='utf-8')
@@ -804,9 +833,12 @@ def api_retrain():
             status['log'].append(msg)
             status_file.write_text(json.dumps(status, ensure_ascii=False), encoding='utf-8')
         try:
-            res = run_retrain(category, models, log=log)
+            res = run_retrain(category, models, epochs=epochs, log=log)
+            import apple_defect_detector as _det
+            for _attr in ('_scaler', '_svm_model', '_rf_model', '_dl_model', '_yolo_model', '_yolo_detect_model'):
+                setattr(_det, _attr, None)
             status['results'] = res
-            status['log'].append('重训完成！请重启服务使新模型生效。')
+            status['log'].append('重训完成！新模型已生效（无需重启）。')
         except Exception as e:
             status['error'] = str(e)
         status['running'] = False
@@ -815,6 +847,49 @@ def api_retrain():
     _retrain_thread = threading.Thread(target=worker, daemon=True)
     _retrain_thread.start()
     return jsonify({'success': True, 'message': '重训已开始，请在数据集页面查看进度'})
+
+
+@app.route('/api/export/train', methods=['POST'])
+def api_export_train():
+    """仅导出/合并训练集（不训练）：model = dl | yolo"""
+    global _retrain_thread
+    data = request.get_json(silent=True) or {}
+    category = data.get('category', 'apple')
+    model = data.get('model', 'dl')
+    if model not in ('dl', 'yolo'):
+        return jsonify({'error': 'model 仅支持 dl / yolo'}), 400
+    if _retrain_thread and _retrain_thread.is_alive():
+        return jsonify({'error': '已有任务在运行'}), 409
+    status_file = config.INSTANCE_DIR / 'retrain_status.json'
+    status = {'running': True, 'log': [], 'results': None, 'error': None}
+    status_file.write_text(json.dumps(status, ensure_ascii=False), encoding='utf-8')
+
+    def worker():
+        def log(msg):
+            status['log'].append(msg)
+            status_file.write_text(json.dumps(status, ensure_ascii=False), encoding='utf-8')
+        try:
+            if model == 'yolo':
+                from scripts.yolo_export import merge
+                r = merge(category, log=log)
+                status['results'] = {'export': 'yolo', 'count': r['exported'], 'skipped': r['skipped']}
+            else:
+                import shutil
+                from scripts.export_dataset import export
+                cat_export = config.OUTPUT_DIR / 'dataset_export' / category
+                if cat_export.exists():
+                    shutil.rmtree(str(cat_export))
+                n = export(category, 0.8, 42)
+                status['results'] = {'export': 'dl', 'count': n}
+            status['log'].append('导出完成，可以开始重训。')
+        except Exception as e:
+            status['error'] = str(e)
+        status['running'] = False
+        status_file.write_text(json.dumps(status, ensure_ascii=False), encoding='utf-8')
+
+    _retrain_thread = threading.Thread(target=worker, daemon=True)
+    _retrain_thread.start()
+    return jsonify({'success': True, 'message': '导出任务已开始'})
 
 
 @app.route('/api/retrain/status')

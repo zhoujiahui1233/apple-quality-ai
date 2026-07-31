@@ -65,6 +65,9 @@ def label_to_class(name):
 
 def export_dataset(category, seed=42):
     from scripts.export_dataset import export
+    cat_export = EXPORT_DIR / category
+    if cat_export.exists():
+        shutil.rmtree(str(cat_export))
     total = export(category, 0.8, seed)
     if not total:
         raise RuntimeError("没有可用的数据集，请先在 dataset_collected/{category}/{合格,不合格}/ 放入图片")
@@ -242,8 +245,19 @@ def train_dl(category, epochs, log):
     model.classifier = nn.Sequential(
         nn.Linear(model.classifier[0].in_features, 128),
         nn.ReLU(), nn.Dropout(0.3), nn.Linear(128, 2))
+    prev_path = config.ROOT_DIR / MODEL_FILES['dl']
+    lr = 1e-3
+    if prev_path.exists():
+        try:
+            model.load_state_dict(torch.load(str(prev_path), map_location=device, weights_only=True))
+            lr = 5e-4
+            _log(log, f"[DL] \u5df2\u52a0\u8f7d\u5f53\u524d\u6a21\u578b\u7ee7\u7eed\u5fae\u8c03: {MODEL_FILES['dl']}")
+        except Exception as e:
+            _log(log, f"[DL] \u5f53\u524d\u6a21\u578b\u52a0\u8f7d\u5931\u8d25\uff0c\u6539\u4e3a\u4ece\u96f6\u8bad\u7ec3: {e}")
+    else:
+        _log(log, '[DL] \u672a\u627e\u5230\u5f53\u524d\u6a21\u578b\uff0c\u4ece\u96f6\u8bad\u7ec3')
     model = model.to(device)
-    opt = optim.Adam(model.parameters(), lr=1e-3)
+    opt = optim.Adam(model.parameters(), lr=lr)
     lossf = nn.CrossEntropyLoss()
 
     _log(log, f"[DL] 训练 {epochs} 轮 (设备: {device})...")
@@ -283,26 +297,38 @@ def run_retrain(category, models, epochs=15, log=None):
     _log(log, f"=== 一键重训: {category} / {models} ===")
     if not (DATASET_DIR / category).is_dir():
         raise RuntimeError(f"品类目录不存在: {category}")
-    n_export = export_dataset(category)
-    _log(log, f"数据集已导出（train/val 切分，共 {n_export} 张）")
 
     from services.model_registry import ModelRegistry
     registry = ModelRegistry()
     summary = {}
 
-    if "svm" in models or "rf" in models:
-        accs, n_tr, n_va = train_ml(category, log)
-        for m in ("svm", "rf"):
-            if m in models:
-                entry = registry.register(category, m, accs[m], n_tr)
-                summary[m] = {"accuracy": round(accs[m], 2), "version": entry["version"], "train": n_tr, "val": n_va}
-                _log(log, f"已登记 {category}_{m} {entry['version']} 准确率 {accs[m]:.2f}%")
+    if any(m in models for m in ("svm", "rf", "dl")):
+        n_export = export_dataset(category)
+        _log(log, f"分类数据集已导出（train/val 切分，共 {n_export} 张）")
 
-    if "dl" in models:
-        acc, n_tr, n_va = train_dl(category, epochs, log)
-        entry = registry.register(category, "dl", acc, n_tr)
-        summary["dl"] = {"accuracy": round(acc, 2), "version": entry["version"], "train": n_tr, "val": n_va}
-        _log(log, f"已登记 {category}_dl {entry['version']} 准确率 {acc:.2f}%")
+        if "svm" in models or "rf" in models:
+            accs, n_tr, n_va = train_ml(category, log)
+            for m in ("svm", "rf"):
+                if m in models:
+                    entry = registry.register(category, m, accs[m], n_tr)
+                    summary[m] = {"accuracy": round(accs[m], 2), "version": entry["version"], "train": n_tr, "val": n_va}
+                    _log(log, f"已登记 {category}_{m} {entry['version']} 准确率 {accs[m]:.2f}%")
+
+        if "dl" in models:
+            acc, n_tr, n_va = train_dl(category, epochs, log)
+            entry = registry.register(category, "dl", acc, n_tr)
+            summary["dl"] = {"accuracy": round(acc, 2), "version": entry["version"], "train": n_tr, "val": n_va}
+            _log(log, f"已登记 {category}_dl {entry['version']} 准确率 {acc:.2f}%")
+
+    if "yolo" in models:
+        from scripts.yolo_export import merge
+        from scripts.yolo_retrain import train as train_yolo
+        n_yolo = merge(category, log=log)
+        _log(log, f"YOLO 训练集已合并（导出 {n_yolo['exported']} 张）")
+        acc = train_yolo(category, epochs=epochs, log=log)
+        entry = registry.register(category, "yolo", acc, n_yolo["exported"])
+        summary["yolo"] = {"accuracy": acc, "version": entry["version"], "train": n_yolo["exported"]}
+        _log(log, f"已登记 {category}_yolo {entry['version']} mAP50-95 {acc}%")
 
     _log(log, f"=== 重训完成: {summary} ===")
     return {"category": category, "summary": summary}

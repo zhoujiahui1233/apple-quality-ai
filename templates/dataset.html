@@ -35,11 +35,17 @@
 .pg-sel { background:rgba(10,16,30,0.9); color:var(--text); border:1px solid var(--border); border-radius:8px; padding:5px 10px; font-size:12px; }
 </style>
 
-<div style="display:flex;gap:10px;margin-bottom:14px;flex-wrap:wrap;align-items:center;">
+<div style="display:flex;gap:8px;margin-bottom:8px;flex-wrap:wrap;align-items:center;">
   <a href="/annotate" class="btn btn-sm" style="border:1px solid var(--primary);color:var(--primary);background:rgba(0,212,255,0.08);"><i class="fas fa-tags"></i> 去标注未分类图片</a>
-  <button id="retrainBtn" class="btn btn-sm" style="border:1px solid var(--accent);color:var(--accent);background:rgba(0,255,136,0.06);" onclick="startRetrain()"><i class="fas fa-sync-alt"></i> 一键重训（SVM+RF）</button>
+  <span style="color:var(--text-dim);font-size:12px;">模型训练：</span>
+  <button class="btn btn-sm" style="border:1px solid var(--accent);color:var(--accent);background:rgba(0,255,136,0.06);" onclick="startRetrain()"><i class="fas fa-sync-alt"></i> SVM+RF 重训</button>
+  <button class="btn btn-sm" style="border:1px solid var(--primary);color:var(--primary);background:rgba(0,212,255,0.08);" onclick="exportTrain('dl')"><i class="fas fa-upload"></i> 导出DL训练集</button>
+  <button class="btn btn-sm" style="border:1px solid var(--primary);color:var(--primary);background:rgba(0,212,255,0.08);" onclick="startRetrainDL()"><i class="fas fa-brain"></i> 重训DL</button>
+  <button class="btn btn-sm" style="border:1px solid var(--warning);color:var(--warning);background:rgba(255,193,7,0.08);" onclick="exportTrain('yolo')"><i class="fas fa-upload"></i> 导出YOLO训练集</button>
+  <button class="btn btn-sm" style="border:1px solid var(--warning);color:var(--warning);background:rgba(255,193,7,0.08);" onclick="startRetrainYOLO()"><i class="fas fa-crop-alt"></i> 重训YOLO</button>
   <span id="retrainState" style="color:var(--text-dim);font-size:12px;"></span>
 </div>
+<div style="font-size:11px;color:var(--text-dim);margin:0 0 12px;line-height:1.7;">流程：先点“导出DL/YOLO训练集”（把收集的数据合并进对应训练集），数据量足够后再点“重训DL/YOLO”。YOLO 在 CPU 上训练较慢，会提示输入轮数，建议先用 3~5 轮测试。</div>
 <div id="retrainLog" style="display:none;background:rgba(10,16,30,0.9);border:1px solid var(--border);border-radius:10px;padding:10px 14px;font-size:12px;color:var(--accent);max-height:220px;overflow-y:auto;margin-bottom:14px;font-family:Consolas,monospace;white-space:pre-wrap;"></div>
 <div class="stat-row" id="statRow"></div>
 <div id="categoryContainer"></div>
@@ -134,7 +140,36 @@ function pageCatChange(val) {
 function startRetrain() {
   var cat = localStorage.getItem('category') || 'apple';
   if (!confirm('确认对 ' + cat + ' 品类执行一键重训（SVM+RF）？将自动切分数据集、备份旧模型并登记新版本。')) return;
-  fetch('/api/retrain', {method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({category: cat, models: ['svm','rf']})})
+  runRetrain(cat, ['svm','rf'], 15);
+}
+function startRetrainDL() {
+  var cat = localStorage.getItem('category') || 'apple';
+  var ep = prompt('DL 训练轮数（默认 15）', '15');
+  if (ep === null) return;
+  ep = parseInt(ep, 10) || 15;
+  runRetrain(cat, ['dl'], ep);
+}
+function startRetrainYOLO() {
+  var cat = localStorage.getItem('category') || 'apple';
+  var ep = prompt('YOLO 训练轮数（默认 30；CPU 训练较慢，建议先试 3~5 轮）', '30');
+  if (ep === null) return;
+  ep = parseInt(ep, 10) || 30;
+  runRetrain(cat, ['yolo'], ep);
+}
+function runRetrain(cat, models, epochs) {
+  fetch('/api/retrain', {method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({category: cat, models: models, epochs: epochs})})
+    .then(function(r){ return r.json(); })
+    .then(function(d){
+      if (d.success) pollRetrain();
+      else alert(d.error || '启动失败');
+    })
+    .catch(function(e){ alert('启动失败: ' + e); });
+}
+function exportTrain(model) {
+  var cat = localStorage.getItem('category') || 'apple';
+  var name = model === 'yolo' ? 'YOLO' : 'DL';
+  if (!confirm('确认把当前品类的收集数据导出并合并到' + name + '训练集？')) return;
+  fetch('/api/export/train', {method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({category: cat, model: model})})
     .then(function(r){ return r.json(); })
     .then(function(d){
       if (d.success) pollRetrain();
@@ -155,7 +190,7 @@ function pollRetrain() {
       else {
         clearInterval(retrainTimer);
         if (d.error) { state.textContent = '❌ 失败: ' + d.error; logBox.style.color = 'var(--danger)'; }
-        else { state.textContent = '✅ 完成，请重启服务使新模型生效'; logBox.style.color = 'var(--accent)'; }
+        else { state.textContent = '✅ 完成，新模型已生效（无需重启）'; logBox.style.color = 'var(--accent)'; }
       }
     });
   }, 1500);
