@@ -29,6 +29,40 @@ class DetectionService:
             cv2.imwrite(upload_path, img)
         return img
 
+    @staticmethod
+    def _remove_upload(upload_path):
+        """处理失败时清理已上传的图片，避免孤儿文件"""
+        if upload_path:
+            try:
+                if os.path.exists(upload_path):
+                    os.remove(upload_path)
+            except Exception:
+                pass
+
+    @staticmethod
+    def _parse_tuning(tuning):
+        """容错解析参数：无效值回落默认"""
+        tuning = tuning or {}
+
+        def _int(v, d):
+            try:
+                return int(float(v))
+            except Exception:
+                return d
+
+        def _float(v, d):
+            try:
+                return float(v)
+            except Exception:
+                return d
+
+        return {
+            "sensitivity": _int(tuning.get("sensitivity"), config.DEFECT_SENSITIVITY),
+            "min_area": _int(tuning.get("min_area"), config.DEFECT_MIN_AREA),
+            "premium_th": _float(tuning.get("premium_th"), config.PREMIUM_THRESHOLD),
+            "standard_th": _float(tuning.get("standard_th"), config.STANDARD_THRESHOLD),
+        }
+
     def process_upload(self, file_storage, category: str, tuning=None) -> dict:
         tuning = tuning or {}
         if category == "auto":
@@ -44,6 +78,7 @@ class DetectionService:
         unique_name, upload_path = self._save_upload(file_storage)
         img = cv2.imread(upload_path)
         if img is None:
+            self._remove_upload(upload_path)
             return {"error": "无法解析图片文件"}
         category, confidence = auto_detect_category(img)
         if category == "apple":
@@ -59,11 +94,17 @@ class DetectionService:
         """面包/饮料: 走统一管线"""
         img = cv2.imread(upload_path)
         if img is None:
+            self._remove_upload(upload_path)
             return {"error": "无法解析图片文件"}
         img = self._auto_resize(img, upload_path)
 
-        pipe = run_detection(img, category)
+        try:
+            pipe = run_detection(img, category)
+        except ValueError:
+            self._remove_upload(upload_path)
+            return {"error": "暂不支持该品类"}
         if "error" in pipe:
+            self._remove_upload(upload_path)
             return pipe
 
         result_filename = f"result_{unique_name}"
@@ -104,19 +145,22 @@ class DetectionService:
 
         img = cv2.imread(upload_path)
         if img is None:
+            self._remove_upload(upload_path)
             return {"error": "无法解析图片文件"}
         img = self._auto_resize(img, upload_path)
 
         img_p, _ = preprocess(img)
         apple_mask, apple_contour = segment_apple(img_p)
         if apple_mask is None:
+            self._remove_upload(upload_path)
             return {"error": "未检测到苹果区域，请换一张图片"}
 
         apple_pixels = int(np.sum(apple_mask > 0))
-        sensitivity = int(tuning.get("sensitivity", 5)) if tuning else 5
-        min_area = int(tuning.get("min_area", 200)) if tuning else 200
-        premium_th = float(tuning.get("premium_th", config.PREMIUM_THRESHOLD)) if tuning else config.PREMIUM_THRESHOLD
-        standard_th = float(tuning.get("standard_th", config.STANDARD_THRESHOLD)) if tuning else config.STANDARD_THRESHOLD
+        tuned = self._parse_tuning(tuning)
+        sensitivity = tuned["sensitivity"]
+        min_area = tuned["min_area"]
+        premium_th = tuned["premium_th"]
+        standard_th = tuned["standard_th"]
 
         defect_mask, defect_contours = detect_defects(img_p, apple_mask, sensitivity=sensitivity, min_area=min_area)
         defect_pixels = int(np.sum(defect_mask > 0))

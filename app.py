@@ -97,6 +97,24 @@ ALLOWED_EXTENSIONS = {'.jpg', '.jpeg', '.png', '.bmp'}
 def allowed_file(filename):
     return Path(filename).suffix.lower() in ALLOWED_EXTENSIONS
 
+def _safe_component(name):
+    """校验品类/标签/文件名，拒绝路径穿越与分隔符"""
+    if not name or name in (".", ".."):
+        return False
+    if "/" in name or "\\" in name or os.path.isabs(name):
+        return False
+    return True
+
+
+def _resolve_under(base: Path, rel: str):
+    """把 rel 解析到 base 下，越界返回 None"""
+    try:
+        target = (base / rel).resolve()
+        target.relative_to(base.resolve())
+        return target
+    except Exception:
+        return None
+
 
 @app.route('/')
 def index():
@@ -133,6 +151,11 @@ def upload():
         return jsonify({'error': f'检测失败: {str(e)}'}), 500
 
 
+@app.errorhandler(413)
+def too_large(e):
+    return jsonify({'error': '图片过大，请上传 16MB 以内的图片'}), 413
+
+
 @app.route('/history')
 def history():
     page = request.args.get('page', 1, type=int)
@@ -150,21 +173,6 @@ def history():
     records = pagination.items
 
     return render_template('history.html', active_tab='history', records=records, pagination=pagination, grade_filter=grade_filter, category=category)
-    page = request.args.get('page', 1, type=int)
-    per_page = 12
-    grade_filter = request.args.get('grade', '')
-
-    query = DetectionRecord.query.order_by(DetectionRecord.created_at.desc())
-    if grade_filter:
-        query = query.filter(DetectionRecord.grade.contains(grade_filter))
-
-    pagination = query.paginate(page=page, per_page=per_page, error_out=False)
-    records = pagination.items
-
-    return render_template('history.html',
-                           records=records,
-                           pagination=pagination,
-                           grade_filter=grade_filter)
 
 
 @app.route('/detail/<int:record_id>')
@@ -177,12 +185,7 @@ def detail(record_id):
 def delete(record_id):
     record = DetectionRecord.query.get_or_404(record_id)
     try:
-        # 删除关联图片文件
-        for fname in [record.filename, record.result_filename]:
-            if fname:
-                fpath = os.path.join(app.config['UPLOAD_FOLDER'], fname)
-                if os.path.exists(fpath):
-                    os.remove(fpath)
+        _delete_record_files(record)
         db.session.delete(record)
         db.session.commit()
         return jsonify({'success': True})
@@ -201,14 +204,27 @@ def _grade_class(grade: str) -> str:
 
 
 def _delete_record_files(record):
-    for fname in [record.filename, record.result_filename]:
-        if fname:
-            fpath = os.path.join(app.config['UPLOAD_FOLDER'], fname)
-            if os.path.exists(fpath):
-                try:
-                    os.remove(fpath)
-                except Exception:
-                    pass
+    """删除记录关联的所有图片文件（原图/结果图/四模型可视化/YOLO检测图）"""
+    names = []
+    if record.filename:
+        names.append(record.filename)
+        # 四模型可视化 + YOLO检测图与上传文件同名前缀
+        for prefix in ("svm_", "rf_", "dl_", "yolo_", "detect_"):
+            names.append(prefix + record.filename)
+    if record.result_filename:
+        names.append(record.result_filename)
+    for fname in names:
+        if not fname:
+            continue
+        # 防止路径穿越：仅允许文件名本身
+        if os.path.basename(fname) != fname:
+            continue
+        fpath = os.path.join(app.config['UPLOAD_FOLDER'], fname)
+        if os.path.exists(fpath):
+            try:
+                os.remove(fpath)
+            except Exception:
+                pass
 
 
 def _apply_record_filter(query, filt):
@@ -388,9 +404,11 @@ def annotate_save():
     label = data.get("label", "")
     if not (src_rel and category and label):
         return jsonify({"error": "参数不完整"}), 400
+    if not (_safe_component(category) and _safe_component(label)):
+        return jsonify({"error": "非法的品类或标签"}), 400
     base = config.ROOT_DIR / "dataset_collected"
-    src = base / src_rel
-    if not src.is_file():
+    src = _resolve_under(base, src_rel)
+    if src is None or not src.is_file():
         return jsonify({"error": "文件不存在"}), 404
     dst_dir = base / category / label
     dst_dir.mkdir(parents=True, exist_ok=True)
@@ -409,8 +427,8 @@ def annotate_skip():
     if not src_rel:
         return jsonify({"error": "参数不完整"}), 400
     base = config.ROOT_DIR / "dataset_collected"
-    src = base / src_rel
-    if src.is_file():
+    src = _resolve_under(base, src_rel)
+    if src is not None and src.is_file():
         skip_dir = base / "_skipped"
         skip_dir.mkdir(parents=True, exist_ok=True)
         shutil.move(str(src), str(skip_dir / src.name))
@@ -627,6 +645,8 @@ def collect_image():
             return jsonify({'error': '\u53d1\u73b0\u7591\u4f3c\u91cd\u590d\u56fe\u7247\uff0c\u5df2\u963b\u6b62\u4fdd\u5b58\u3002\u53ef\u52fe\u9009\u201c\u5f3a\u5236\u4fdd\u5b58\u201d\u3002',
                             'dedup': dup}), 400
 
+    if not (_safe_component(category) and _safe_component(label)):
+        return jsonify({'error': '非法的品类或标签'}), 400
     base = config.ROOT_DIR / 'dataset_collected'
     label_dir = base / category / label
     label_dir.mkdir(parents=True, exist_ok=True)
@@ -683,7 +703,9 @@ def delete_dataset_item():
     if not (category and label and filename):
         return jsonify({'error': '参数不完整'}), 400
     ok = dataset_service.delete(category, label, filename)
-    return jsonify({'success': ok})
+    if not ok:
+        return jsonify({'error': '文件不存在或参数非法'}), 404
+    return jsonify({'success': True})
 
 
 

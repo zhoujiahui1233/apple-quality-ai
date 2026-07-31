@@ -265,6 +265,14 @@ function up(f) {
   document.getElementById('streamStatus').innerHTML = '<i class="fas fa-spinner fa-spin"></i> \u5206\u6790\u4e2d...';
   var fd = new FormData(); fd.append('file', f);
   fd.append('category', localStorage.getItem('category') || 'apple');
+  // 参数调节：前端滑条值发送给后端（百分比转小数）
+  var tunVals = {
+    sensitivity: document.getElementById('sensitivity') ? document.getElementById('sensitivity').value : 5,
+    min_area: document.getElementById('minArea') ? document.getElementById('minArea').value : 200,
+    premium_th: document.getElementById('premiumTh') ? (parseFloat(document.getElementById('premiumTh').value) / 100).toFixed(4) : 0.05,
+    standard_th: document.getElementById('standardTh') ? (parseFloat(document.getElementById('standardTh').value) / 100).toFixed(4) : 0.15
+  };
+  for (var tk in tunVals) fd.append(tk, tunVals[tk]);
   var controller = new AbortController();
   var timeoutId = setTimeout(function() { controller.abort(); }, 60000);
   fetch('/upload', { method: 'POST', body: fd, signal: controller.signal })

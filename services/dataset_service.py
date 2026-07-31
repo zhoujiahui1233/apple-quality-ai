@@ -8,6 +8,23 @@ import config
 class DatasetService:
     BASE = config.ROOT_DIR / "dataset_collected"
 
+    @staticmethod
+    def _safe(name):
+        """参数非法：拒绝路径穿越与分隔符"""
+        if not name or name in (".", ".."):
+            return False
+        if "/" in name or "\\" in name or os.path.isabs(name):
+            return False
+        return True
+
+    @staticmethod
+    def _within(base, target):
+        try:
+            target.resolve().relative_to(base.resolve())
+            return True
+        except Exception:
+            return False
+
     def save(self, file_storage, category: str, label: str) -> dict:
         cat_dir = self.BASE / category / label
         cat_dir.mkdir(parents=True, exist_ok=True)
@@ -37,7 +54,11 @@ class DatasetService:
         return {"categories": result, "total": total}
 
     def delete(self, category: str, label: str, filename: str) -> bool:
-        target = self.BASE / category / label / filename
+        if not (self._safe(category) and self._safe(label) and self._safe(filename)):
+            return False
+        target = (self.BASE / category / label / filename).resolve()
+        if not self._within(self.BASE, target):
+            return False
         if target.exists() and target.is_file():
             target.unlink()
             return True
@@ -45,8 +66,11 @@ class DatasetService:
 
     def move(self, category: str, filename: str, from_label: str, to_label: str):
         """修正标签：把图片从一个标签移动到另一个，重命名为新标签以避免旧标签/缺陷类型污染分类。"""
-        src = self.BASE / category / from_label / filename
-        if not src.is_file():
+        if not (self._safe(category) and self._safe(filename)
+                and self._safe(from_label) and self._safe(to_label)):
+            return False, "参数非法"
+        src = (self.BASE / category / from_label / filename).resolve()
+        if not self._within(self.BASE, src) or not src.is_file():
             return False, "文件不存在"
         dst_dir = self.BASE / category / to_label
         dst_dir.mkdir(parents=True, exist_ok=True)

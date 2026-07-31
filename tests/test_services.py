@@ -47,3 +47,31 @@ def test_model_registry_register_rollback(tmp_path, monkeypatch):
     assert reg.rollback("apple", "svm", "v1") is True
     assert reg.active("apple", "svm")["version"] == "v1"
     assert reg.rollback("apple", "svm", "v9") is False
+
+
+def test_dataset_service_delete_rejects_path_traversal(tmp_path, monkeypatch):
+    from services.dataset_service import DatasetService
+    monkeypatch.setattr(DatasetService, "BASE", tmp_path)
+    d = tmp_path / "apple" / "合格"
+    d.mkdir(parents=True)
+    (d / "a.png").write_bytes(b"x")
+    # 路径穿越文件名应被拒绝，且不能删除外部文件
+    outside = tmp_path.parent / "target.txt"
+    outside.write_bytes(b"secret")
+    svc = DatasetService()
+    assert svc.delete("apple", "合格", "../合格/../../target.txt") is False
+    assert svc.delete("apple", "..", "a.png") is False
+    assert svc.delete("apple", "合格", "a.png") is True
+    assert outside.exists() is True
+
+
+def test_dataset_service_move_rejects_path_traversal(tmp_path, monkeypatch):
+    from services.dataset_service import DatasetService
+    monkeypatch.setattr(DatasetService, "BASE", tmp_path)
+    good = tmp_path / "apple" / "合格"
+    good.mkdir(parents=True)
+    (good / "a.png").write_bytes(b"x")
+    svc = DatasetService()
+    ok, info = svc.move("apple", "../../target.png", "合格", "不合格")
+    assert ok is False
+    assert (tmp_path / "apple" / "不合格" / "a.png").exists() is False

@@ -17,8 +17,6 @@ except ImportError:
 
 import config
 
-import config
-
 logger = logging.getLogger("detector")
 
 # ==================== 全局配置参数 ====================
@@ -400,9 +398,9 @@ def load_svm_model():
 def predict_with_svm(img_bgr: np.ndarray, apple_mask: np.ndarray, contour: np.ndarray) -> tuple:
     model = load_svm_model()
     scaler = load_scaler()
-    if model is None: return None, (0,0,0), 0.0, ""
+    if model is None: return None, (0,0,0), ""
     feats = extract_features_v2(img_bgr)
-    if feats is None: return None, (0,0,0), 0.0, ""
+    if feats is None: return None, (0,0,0), ""
     if scaler is not None:
         feats = scaler.transform(feats.reshape(1, -1)).flatten()
     _, pred = model.predict(np.array([feats], dtype=np.float32))
@@ -428,9 +426,9 @@ def load_rf_model():
     return _rf_model
 def predict_with_rf(img_bgr: np.ndarray, apple_mask: np.ndarray, contour: np.ndarray) -> tuple:
     model = load_rf_model()
-    if model is None: return None, (0,0,0), 0.0, ""
+    if model is None: return None, (0,0,0), ""
     feats = extract_features_v2(img_bgr)
-    if feats is None: return None, (0,0,0), 0.0, ""
+    if feats is None: return None, (0,0,0), ""
     pred = model.predict(np.array([feats], dtype=np.float32))[0]
     grade = (chr(20248)+chr(36136)+" Premium") if pred==0 else (chr(19981)+chr(21512)+chr(26684)+" Reject")
     color = (0,200,0) if pred==0 else (0,0,200)
@@ -462,7 +460,7 @@ def load_dl_model():
     return _dl_model
 def predict_with_dl(img_bgr: np.ndarray) -> tuple:
     model = load_dl_model()
-    if model is None: return None, (0,0,0), 0.0, 0.0, ""
+    if model is None: return None, (0,0,0), 0.0, ""
     from PIL import Image
     img_rgb = cv2.cvtColor(img_bgr, cv2.COLOR_BGR2RGB); img_pil = Image.fromarray(img_rgb)
     img_t = _dl_transform(img_pil).unsqueeze(0).to(_dl_device)

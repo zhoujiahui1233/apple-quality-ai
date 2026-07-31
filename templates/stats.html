@@ -84,6 +84,8 @@
 .mg-sel::-webkit-calendar-picker-indicator { filter: invert(1); opacity:0.6; }
 </style>
 <script>
+var CUR_CAT = localStorage.getItem('category');
+if (CUR_CAT === null) CUR_CAT = 'apple';
 (function() { var mc = document.getElementById('mgCat'); if (mc && CUR_CAT) mc.value = CUR_CAT; })();
 function mgFilter() {
   var f = {};
@@ -129,8 +131,6 @@ function mgUpdate(field) {
 </script>
 
 <script>
-var CUR_CAT = localStorage.getItem('category');
-if (CUR_CAT === null) CUR_CAT = 'apple';
 document.getElementById('statCat').value = CUR_CAT;
 function statCatChange(val) {
   if (!val) { localStorage.setItem('category', ''); window.location.reload(); return; }
@@ -193,19 +193,9 @@ new Chart(document.getElementById('modelChart'), {
 });
 
 // Recent detections
-fetch('/history?page=1').then(function(r) { return r.text(); }).then(function() {
-  var CUR_CAT = localStorage.getItem('category');
-if (CUR_CAT === null) CUR_CAT = 'apple';
-document.getElementById('statCat').value = CUR_CAT;
-function statCatChange(val) {
-  if (!val) { localStorage.setItem('category', ''); window.location.reload(); return; }
-  localStorage.setItem('category', val);
-  switchCategory(val);
-}
 fetch('/api/stats' + (CUR_CAT ? '?category=' + CUR_CAT : '')).then(function(r) { return r.json(); }).then(function(d) {
     var log = document.getElementById('recentLog');
     log.innerHTML = '<div style="text-align:center;padding:12px;color:var(--text-dim);font-size:12px;">共 ' + (d.total || 0) + ' 次检测 | 优质率: ' + (d.total ? (d.premium/d.total*100).toFixed(1) : 0) + '%</div>';
   });
-});
 </script>
 {% endblock %}
