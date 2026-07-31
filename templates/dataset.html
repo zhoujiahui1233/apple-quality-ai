@@ -88,7 +88,7 @@ function loadDataset() {
           if (imgs.length === 0) continue;
           html += '<div class="label-group"><div class="label-title">' + lb + ' (' + imgs.length + ')</div><div class="img-grid">';
           for (var m = 0; m < imgs.length; m++) {
-            html += '<div class="img-item"><img src="/dataset_collected/' + k + '/' + lb + '/' + imgs[m] + '" loading="lazy">'+ '<button class="img-del" onclick="delImg(\'' + k + '\',\'' + lb + '\',\'' + imgs[m] + '\')">✕</button>'+ '<select class="img-move" onchange="moveImg(this, \'' + k + '\', \'' + lb + '\', \'' + imgs[m] + '\')">'+ '<option value="">改标签</option><option value="合格">→合格</option><option value="不合格">→不合格</option></select>+ '</div>';
+            html += '<div class="img-item"><img src="/dataset_collected/' + k + '/' + lb + '/' + imgs[m] + '" loading="lazy">'+ '<button class="img-del" onclick="delImg(\'' + k + '\',\'' + lb + '\',\'' + imgs[m] + '\')">✕</button>'+ '<select class="img-move" onchange="moveImg(this, \'' + k + '\', \'' + lb + '\', \'' + imgs[m] + '\')">'+ '<option value="">改标签</option><option value="合格">→合格</option><option value="不合格">→不合格</option></select>' + '</div>';
           }
           html += '</div></div>';
         }
