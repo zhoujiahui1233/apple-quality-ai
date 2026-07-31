@@ -45,16 +45,32 @@
             <div class="model-btn" onclick="switchModel('svm')">SVM</div>
           </div>
           <div class="stream-status" id="streamStatus"><i class="fas fa-arrow-circle-up"></i> 上传图片开始检测</div>
-        <div id="saveToDatasetBar" class="d-none" style="position:absolute;bottom:48px;left:12px;right:12px;z-index:2;display:flex;gap:6px;align-items:center;">
-          <select id="datasetCategory" style="flex:1;padding:6px 10px;border-radius:8px;border:1px solid var(--border);background:rgba(0,0,0,0.7);color:var(--text);font-size:12px;backdrop-filter:blur(8px);">
-            <option value="good">优质果</option>
-            <option value="defect_scar">疤疵</option>
-            <option value="defect_rot">腐烂</option>
-            <option value="defect_bruise">磕伤</option>
-            <option value="defect_stain">污点</option>
-            <option value="unlabeled">未分类</option>
-          </select>
-          <button onclick="saveToDataset()" style="padding:6px 14px;border-radius:8px;border:1px solid var(--accent);background:rgba(0,255,136,0.15);color:var(--accent);font-size:12px;white-space:nowrap;cursor:pointer;"><i class="fas fa-save"></i> 保存到数据集</button>
+                <div id="saveToDatasetBar" class="d-none" style="position:absolute;bottom:48px;left:12px;right:12px;z-index:3;background:rgba(10,18,34,0.88);backdrop-filter:blur(12px);border:1px solid var(--border);border-radius:10px;padding:10px 12px;">
+          <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap;">
+            <span style="font-size:12px;color:var(--text-dim);">标签:</span>
+            <label style="font-size:12px;color:var(--text);cursor:pointer;"><input type="radio" name="dsLabel" value="合格" checked style="accent-color:var(--accent);" onchange="updateDefectType()"> 合格</label>
+            <label style="font-size:12px;color:var(--text);cursor:pointer;"><input type="radio" name="dsLabel" value="不合格" style="accent-color:var(--danger);" onchange="updateDefectType()"> 不合格</label>
+            <select id="defectType" style="display:none;padding:4px 8px;border-radius:6px;border:1px solid var(--border);background:rgba(0,0,0,0.7);color:var(--text);font-size:12px;">
+              <option value="">缺陷类型</option>
+              <option value="碰伤">碰伤</option>
+              <option value="腐烂">腐烂</option>
+              <option value="虫眼">虫眼</option>
+              <option value="斑点">斑点</option>
+              <option value="畸形">畸形</option>
+              <option value="其他">其他</option>
+            </select>
+            <button onclick="toggleSmartPanel()" style="padding:5px 10px;border-radius:8px;border:1px solid var(--primary);background:rgba(0,212,255,0.1);color:var(--primary);font-size:12px;cursor:pointer;"><i class="fas fa-sliders-h"></i> 智能选项</button>
+            <button onclick="smartPreview()" style="padding:5px 10px;border-radius:8px;border:1px solid var(--primary);background:rgba(0,212,255,0.15);color:var(--primary);font-size:12px;cursor:pointer;"><i class="fas fa-search"></i> 智能分析</button>
+            <button onclick="saveToDataset()" style="padding:5px 14px;border-radius:8px;border:1px solid var(--accent);background:rgba(0,255,136,0.15);color:var(--accent);font-size:12px;white-space:nowrap;cursor:pointer;"><i class="fas fa-save"></i> 保存到数据集</button>
+          </div>
+          <div id="smartPanel" style="display:none;margin-top:8px;padding-top:8px;border-top:1px solid var(--border);gap:14px;flex-wrap:wrap;font-size:12px;color:var(--text-dim);">
+            <label style="cursor:pointer;"><input type="checkbox" id="optCrop" checked style="accent-color:var(--primary);"> 自动裁剪主体(去背景)</label>
+            <label style="cursor:pointer;"><input type="checkbox" id="optQuality" checked style="accent-color:var(--primary);"> 质量检查(模糊/曝光)</label>
+            <label style="cursor:pointer;"><input type="checkbox" id="optDedup" checked style="accent-color:var(--primary);"> 去重检查</label>
+            <label style="cursor:pointer;"><input type="checkbox" id="optAugment" style="accent-color:var(--primary);"> 数据增强(1变4)</label>
+            <label style="cursor:pointer;"><input type="checkbox" id="optForce" style="accent-color:var(--danger);"> 强制保存</label>
+          </div>
+          <div id="smartResult" style="display:none;margin-top:8px;padding:8px 10px;border-radius:8px;background:rgba(0,0,0,0.4);font-size:12px;color:var(--text);line-height:1.8;"></div>
         </div>
         </div>
       </div>
@@ -258,6 +274,11 @@ function up(f) {
     if (!t.ok) { alert(t.data.error || '\u68c0\u6d4b\u5931\u8d25'); return; }
     var d = t.data;
     window.lastDetectData = d;
+    var _g = d.grade || '';
+    var _isBad = _g.indexOf('Reject') >= 0 || _g.indexOf('\u4e0d\u5408\u683c') >= 0;
+    var _rb = document.querySelector('input[name="dsLabel"][value="' + (_isBad ? '\u4e0d\u5408\u683c' : '\u5408\u683c') + '"]');
+    if (_rb) _rb.checked = true;
+    if (typeof updateDefectType === 'function') { updateDefectType(); }
     var img = document.getElementById('resultImage');
     img.src = d.result_image + '?t=' + Date.now();
     img.classList.remove('d-none');
@@ -316,34 +337,92 @@ function up(f) {
   });
 }
 
-function saveToDataset() {
-  if (!window.lastDetectData || !window.lastDetectData.original_image) {
-    alert("请先检测图片");
-    return;
-  }
-  var cat = document.getElementById("datasetCategory").value;
-  var catId = localStorage.getItem("category") || "apple";
-  var imgUrl = window.lastDetectData.original_image;
-
-  // Download the image and save it
-  fetch(imgUrl).then(function(r) { return r.blob(); }).then(function(blob) {
+function toggleSmartPanel() {
+  var p = document.getElementById('smartPanel');
+  p.style.display = p.style.display === 'none' ? 'flex' : 'none';
+}
+function updateDefectType() {
+  var dt = document.getElementById('defectType');
+  var rb = document.querySelector('input[name="dsLabel"]:checked');
+  dt.style.display = (rb && rb.value === '\u4e0d\u5408\u683c') ? '' : 'none';
+}
+function collectOptions() {
+  return {
+    crop: document.getElementById('optCrop').checked,
+    quality_check: document.getElementById('optQuality').checked,
+    dedup: document.getElementById('optDedup').checked,
+    augment: document.getElementById('optAugment').checked,
+    augment_count: 4,
+    force: document.getElementById('optForce').checked
+  };
+}
+function imageBlob() {
+  return fetch(window.lastDetectData.original_image).then(function(r) { return r.blob(); });
+}
+function smartPreview() {
+  if (!window.lastDetectData || !window.lastDetectData.original_image) { alert('\u8bf7\u5148\u68c0\u6d4b\u56fe\u7247'); return; }
+  var el = document.getElementById('smartResult');
+  el.classList.remove('d-none');
+  el.style.display = '';
+  el.innerHTML = '<i class="fas fa-spinner fa-spin"></i> \u5206\u6790\u4e2d...';
+  imageBlob().then(function(blob) {
     var fd = new FormData();
-    fd.append("file", blob, "capture_" + Date.now() + ".jpg");
-    fd.append("category", catId);
-    fd.append("label", cat);
-    return fetch("/api/collect", { method: "POST", body: fd });
+    fd.append('file', blob, 'preview.jpg');
+    fd.append('category', localStorage.getItem('category') || 'apple');
+    return fetch('/api/collect/preview', { method: 'POST', body: fd });
   }).then(function(r) { return r.json(); }).then(function(d) {
-    if (d.success) {
-      var btn = document.querySelector("#saveToDatasetBar button");
-      var orig = btn.innerHTML;
-      btn.innerHTML = '<i class="fas fa-check"></i> 已保存';
-      setTimeout(function() { btn.innerHTML = orig; }, 2000);
+    if (d.error) { el.innerHTML = '\u5206\u6790\u5931\u8d25: ' + d.error; return; }
+    var q = d.quality;
+    var qColor = q.ok ? 'var(--accent)' : 'var(--danger)';
+    var qText = q.score >= 80 ? '\u6e05\u6670' : (q.ok ? '\u4e00\u822c' : '\u6a21\u7cca/\u66dd\u5149\u5f02\u5e38');
+    var html = '<div><i class="fas fa-image"></i> \u8d28\u91cf\u8bc4\u5206: <b style="color:' + qColor + '">' + q.score + '</b> (' + qText + ')</div>';
+    if (d.dedup.duplicates.length > 0) {
+      html += '<div style="color:var(--danger);"><i class="fas fa-exclamation-triangle"></i> \u7591\u4f3c\u91cd\u590d: ' + d.dedup.duplicates[0].name + ' (\u76f8\u4f3c\u5ea6 ' + Math.round(d.dedup.duplicates[0].sim * 100) + '%)</div>';
     } else {
-      alert("保存失败: " + (d.error || ""));
+      html += '<div style="color:var(--accent);"><i class="fas fa-check-circle"></i> \u672a\u53d1\u73b0\u91cd\u590d\u56fe\u7247</div>';
     }
-  }).catch(function(e) {
-    alert("保存失败: " + e.message);
-  });
+    if (d.crop.available && d.crop.preview_url) {
+      html += '<div><i class="fas fa-crop-alt"></i> \u4e3b\u4f53\u88c1\u526a\u9884\u89c8: <img src="' + d.crop.preview_url + '" style="max-height:120px;border-radius:6px;margin-top:4px;display:block;"></div>';
+    } else {
+      html += '<div style="color:var(--text-dim);"><i class="fas fa-crop-alt"></i> \u672a\u68c0\u6d4b\u5230\u4e3b\u4f53\uff0c\u4fdd\u5b58\u539f\u56fe</div>';
+    }
+    el.innerHTML = html;
+  }).catch(function(e) { el.innerHTML = '\u5206\u6790\u5931\u8d25: ' + e.message; });
+}
+function saveToDataset() {
+  if (!window.lastDetectData || !window.lastDetectData.original_image) { alert('\u8bf7\u5148\u68c0\u6d4b\u56fe\u7247'); return; }
+  var cat = document.querySelector('input[name="dsLabel"]:checked').value;
+  var catId = localStorage.getItem('category') || 'apple';
+  var defectType = document.getElementById('defectType').value;
+  var btn = document.querySelector('#saveToDatasetBar button[onclick="saveToDataset()"]');
+  var orig = btn.innerHTML;
+  btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> \u4fdd\u5b58\u4e2d...';
+  imageBlob().then(function(blob) {
+    var fd = new FormData();
+    fd.append('file', blob, 'capture_' + Date.now() + '.jpg');
+    fd.append('category', catId);
+    fd.append('label', cat);
+    if (cat === '\u4e0d\u5408\u683c' && defectType) { fd.append('defect_type', defectType); }
+    fd.append('options', JSON.stringify(collectOptions()));
+    return fetch('/api/collect', { method: 'POST', body: fd });
+  }).then(function(r) { return r.json().then(function(d) { return { ok: r.ok, data: d }; }); })
+  .then(function(t) {
+    btn.innerHTML = orig;
+    if (t.ok) {
+      var n = (t.data.files || []).length;
+      var msg = '\u5df2\u4fdd\u5b58 ' + n + ' \u5f20';
+      if (t.data.report && t.data.report.augment && t.data.report.augment.length) {
+        msg += ' (\u542b\u589e\u5f3a ' + t.data.report.augment.length + ' \u5f20)';
+      }
+      btn.innerHTML = '<i class="fas fa-check"></i> ' + msg;
+      setTimeout(function() { btn.innerHTML = orig; }, 2500);
+      if (t.data.report && t.data.report.quality && !t.data.report.quality.ok) {
+        alert('\u8b66\u544a: \u8be5\u56fe\u7247\u8d28\u91cf\u8f83\u4f4e\uff0c\u53ef\u80fd\u5f71\u54cd\u8bad\u7ec3\u6548\u679c\u3002');
+      }
+    } else {
+      alert(t.data.error || '\u4fdd\u5b58\u5931\u8d25');
+    }
+  }).catch(function(e) { btn.innerHTML = orig; alert('\u4fdd\u5b58\u5931\u8d25: ' + e.message); });
 }
 </script>
 {% endblock %}

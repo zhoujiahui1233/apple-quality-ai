@@ -24,6 +24,7 @@ import cv2
 import numpy as np
 
 from models import db, DetectionRecord
+from services import dataset_tools
 
 logger = logging.getLogger("app")
 
@@ -555,20 +556,113 @@ def manifest_json():
     return send_from_directory(str(config.STATIC_DIR), 'manifest.json')
 
 
+@app.route('/api/collect/preview', methods=['POST'])
+def collect_preview():
+    """\u667a\u80fd\u5206\u6790\uff1a\u8d28\u91cf\u8bc4\u5206 + \u53bb\u91cd + \u88c1\u526a\u9884\u89c8\uff08\u4e0d\u4fdd\u5b58\uff09"""
+    if 'file' not in request.files:
+        return jsonify({'error': '\u672a\u627e\u5230\u56fe\u7247'}), 400
+    file = request.files['file']
+    category = request.form.get('category', 'apple')
+    data = file.read()
+    arr = np.frombuffer(data, np.uint8)
+    img = cv2.imdecode(arr, cv2.IMREAD_COLOR)
+    if img is None:
+        return jsonify({'error': '\u65e0\u6cd5\u89e3\u6790\u56fe\u7247'}), 400
+
+    quality = dataset_tools.quality_check(img)
+    dedup = dataset_tools.find_duplicates(img, config.ROOT_DIR / 'dataset_collected')
+    crop_img, ratio = dataset_tools.crop_subject(img, category)
+
+    preview_url = None
+    if crop_img is not None:
+        preview_dir = config.UPLOAD_DIR / '_previews'
+        preview_dir.mkdir(parents=True, exist_ok=True)
+        pname = f'preview_{uuid.uuid4().hex[:10]}.jpg'
+        if dataset_tools.save_cropped(crop_img, preview_dir / pname, 300):
+            preview_url = url_for('static', filename=f'uploads/_previews/{pname}')
+
+    return jsonify({
+        'quality': quality,
+        'dedup': dedup,
+        'crop': {'available': crop_img is not None, 'ratio': ratio,
+                 'preview_url': preview_url},
+    })
+
+
 @app.route('/api/collect', methods=['POST'])
 def collect_image():
-    """保存图片到数据集，品类 + 标签"""
+    """\u4fdd\u5b58\u56fe\u7247\u5230\u6570\u636e\u96c6\uff1a\u652f\u6301\u667a\u80fd\u9009\u9879\uff08\u88c1\u526a/\u8d28\u91cf\u68c0\u67e5/\u53bb\u91cd/\u589e\u5f3a/\u7f3a\u9677\u7ec6\u5206\uff09"""
     if 'file' not in request.files:
-        return jsonify({'error': '未找到图片'}), 400
+        return jsonify({'error': '\u672a\u627e\u5230\u56fe\u7247'}), 400
     file = request.files['file']
     category = request.form.get('category', 'unlabeled')
     label = request.form.get('label', 'unlabeled')
+    defect_type = request.form.get('defect_type', '')
+    try:
+        opts = json.loads(request.form.get('options', '{}') or '{}')
+    except Exception:
+        opts = {}
     if file.filename == '':
-        return jsonify({'error': '文件名为空'}), 400
-    result = dataset_service.save(file, category, label)
-    logger.info("数据集收集: [%s/%s] %s", category, label, result.get("filename"))
-    return jsonify(result)
+        return jsonify({'error': '\u6587\u4ef6\u540d\u4e3a\u7a7a'}), 400
 
+    data = file.read()
+    arr = np.frombuffer(data, np.uint8)
+    img = cv2.imdecode(arr, cv2.IMREAD_COLOR)
+    if img is None:
+        return jsonify({'error': '\u65e0\u6cd5\u89e3\u6790\u56fe\u7247'}), 400
+
+    report = {'quality': None, 'dedup': None, 'crop': False, 'augment': []}
+
+    if opts.get('quality_check'):
+        q = dataset_tools.quality_check(img)
+        report['quality'] = q
+        if not q['ok'] and not opts.get('force'):
+            return jsonify({'error': '\u56fe\u7247\u8d28\u91cf\u8fc7\u4f4e\uff08\u6a21\u7cca/\u66dd\u5149\u5f02\u5e38\uff09\uff0c\u5df2\u963b\u6b62\u4fdd\u5b58\u3002\u53ef\u53d6\u6d88\u52fe\u9009\u8d28\u91cf\u68c0\u67e5\u6216\u52fe\u9009\u201c\u5f3a\u5236\u4fdd\u5b58\u201d\u3002',
+                            'quality': q}), 400
+
+    if opts.get('dedup'):
+        dup = dataset_tools.find_duplicates(img, config.ROOT_DIR / 'dataset_collected')
+        report['dedup'] = dup
+        if dup['duplicates'] and not opts.get('force'):
+            return jsonify({'error': '\u53d1\u73b0\u7591\u4f3c\u91cd\u590d\u56fe\u7247\uff0c\u5df2\u963b\u6b62\u4fdd\u5b58\u3002\u53ef\u52fe\u9009\u201c\u5f3a\u5236\u4fdd\u5b58\u201d\u3002',
+                            'dedup': dup}), 400
+
+    base = config.ROOT_DIR / 'dataset_collected'
+    label_dir = base / category / label
+    label_dir.mkdir(parents=True, exist_ok=True)
+    ts = datetime.now().strftime('%Y%m%d_%H%M%S_%f')[:-3]
+    label_part = label if label != 'unlabeled' else 'unlabeled'
+    if label == '\u4e0d\u5408\u683c' and defect_type:
+        label_part = f'\u4e0d\u5408\u683c_{defect_type}'
+    stem = f'{label_part}_{ts}'
+
+    saved = []
+    if opts.get('crop'):
+        crop_img, _ratio = dataset_tools.crop_subject(img, category)
+        if crop_img is not None:
+            fname = f'{stem}_crop.jpg'
+            if dataset_tools.save_cropped(crop_img, label_dir / fname):
+                saved.append(fname)
+                report['crop'] = True
+
+    ext = os.path.splitext(file.filename)[1].lower()
+    if ext not in ('.jpg', '.jpeg', '.png', '.bmp'):
+        ext = '.jpg'
+    orig_fname = f'{stem}{ext}'
+    ok, buf = cv2.imencode(ext, img)
+    if ok:
+        buf.tofile(str(label_dir / orig_fname))
+        saved.append(orig_fname)
+
+    if opts.get('augment'):
+        n = int(opts.get('augment_count', 4) or 4)
+        aug_files = dataset_tools.save_augmented(img, stem, label_dir, n)
+        report['augment'] = aug_files
+        saved.extend(aug_files)
+
+    logger.info("\u6570\u636e\u96c6\u6536\u96c6: [%s/%s] %s", category, label, saved)
+    return jsonify({'success': True, 'category': category, 'label': label,
+                    'files': saved, 'report': report})
 
 @app.route('/api/dataset/list')
 def list_dataset():
