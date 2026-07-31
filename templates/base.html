@@ -159,6 +159,7 @@ body {
       <a href="/history" class="{{"active" if active_tab=="history" else ""}}"><i class="fas fa-history"></i>历史数据</a>
       <a href="/stats" class="{{"active" if active_tab=="stats" else ""}}"><i class="fas fa-chart-bar"></i>数据统计</a>
       <a href="/dataset"><i class="fas fa-database"></i>数据集</a>
+      <a href="/annotate"><i class="fas fa-tags"></i>批量标注</a>
       <a href="#"><i class="fas fa-cube"></i>模型管理</a>
       <a href="#"><i class="fas fa-cog"></i>系统设置</a>
     </div>
@@ -174,6 +175,7 @@ body {
         <a href="/history" class="{{"active" if active_tab=="history" else ""}}"><i class="fas fa-history"></i> 历史数据</a>
         <a href="/stats" class="{{"active" if active_tab=="stats" else ""}}"><i class="fas fa-chart-bar"></i> 数据统计</a>
         <a href="/significance" class="{{"active" if active_tab=="significance" else ""}}"><i class="fas fa-flask"></i> 显著性分析</a>
+        <a href="/annotate" class="{{"active" if active_tab=="annotate" else ""}}"><i class="fas fa-tags"></i> 标注</a>
         <a href="#"><i class="fas fa-cube"></i> 模型管理</a>
         <a href="#"><i class="fas fa-cog"></i> 系统设置</a>
       </div>
@@ -235,6 +237,7 @@ updateClock();
   <a href="/history" style="flex:1;text-align:center;padding:6px 0;color:var(--text-dim);text-decoration:none;font-size:10px;"><i class="fas fa-history" style="display:block;font-size:18px;margin-bottom:2px;"></i>历史</a>
   <a href="/stats" style="flex:1;text-align:center;padding:6px 0;color:var(--text-dim);text-decoration:none;font-size:10px;"><i class="fas fa-chart-bar" style="display:block;font-size:18px;margin-bottom:2px;"></i>统计</a>
   <a href="/dataset" style="flex:1;text-align:center;padding:6px 0;color:var(--text-dim);text-decoration:none;font-size:10px;"><i class="fas fa-database" style="display:block;font-size:18px;margin-bottom:2px;"></i>数据</a>
+  <a href="/annotate" style="flex:1;text-align:center;padding:6px 0;color:var(--text-dim);text-decoration:none;font-size:10px;"><i class="fas fa-tags" style="display:block;font-size:18px;margin-bottom:2px;"></i>标注</a>
   <a href="/significance" style="flex:1;text-align:center;padding:6px 0;color:var(--text-dim);text-decoration:none;font-size:10px;"><i class="fas fa-flask" style="display:block;font-size:18px;margin-bottom:2px;"></i>显著</a>
   <a href="/api/export/report" style="flex:1;text-align:center;padding:6px 0;color:var(--text-dim);text-decoration:none;font-size:10px;"><i class="fas fa-download" style="display:block;font-size:18px;margin-bottom:2px;"></i>导出</a>
 </div>

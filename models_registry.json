@@ -1,0 +1,22 @@
+{
+  "models": {
+    "apple_svm": [
+      {
+        "version": "v1",
+        "accuracy": 100.0,
+        "data_size": 8,
+        "date": "2026-07-31 17:18:01",
+        "active": true
+      }
+    ],
+    "apple_rf": [
+      {
+        "version": "v1",
+        "accuracy": 100.0,
+        "data_size": 8,
+        "date": "2026-07-31 17:18:01",
+        "active": true
+      }
+    ]
+  }
+}

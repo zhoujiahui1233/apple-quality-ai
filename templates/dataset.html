@@ -34,6 +34,12 @@
 .pg-sel { background:rgba(10,16,30,0.9); color:var(--text); border:1px solid var(--border); border-radius:8px; padding:5px 10px; font-size:12px; }
 </style>
 
+<div style="display:flex;gap:10px;margin-bottom:14px;flex-wrap:wrap;align-items:center;">
+  <a href="/annotate" class="btn btn-sm" style="border:1px solid var(--primary);color:var(--primary);background:rgba(0,212,255,0.08);"><i class="fas fa-tags"></i> 去标注未分类图片</a>
+  <button id="retrainBtn" class="btn btn-sm" style="border:1px solid var(--accent);color:var(--accent);background:rgba(0,255,136,0.06);" onclick="startRetrain()"><i class="fas fa-sync-alt"></i> 一键重训（SVM+RF）</button>
+  <span id="retrainState" style="color:var(--text-dim);font-size:12px;"></span>
+</div>
+<div id="retrainLog" style="display:none;background:rgba(10,16,30,0.9);border:1px solid var(--border);border-radius:10px;padding:10px 14px;font-size:12px;color:var(--accent);max-height:220px;overflow-y:auto;margin-bottom:14px;font-family:Consolas,monospace;white-space:pre-wrap;"></div>
 <div class="stat-row" id="statRow"></div>
 <div id="categoryContainer"></div>
 
@@ -106,6 +112,36 @@ function delImg(cat, label, fname) {
 function pageCatChange(val) {
   localStorage.setItem('category', val);
   switchCategory(val);
+}
+
+function startRetrain() {
+  var cat = localStorage.getItem('category') || 'apple';
+  if (!confirm('确认对 ' + cat + ' 品类执行一键重训（SVM+RF）？将自动切分数据集、备份旧模型并登记新版本。')) return;
+  fetch('/api/retrain', {method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({category: cat, models: ['svm','rf']})})
+    .then(function(r){ return r.json(); })
+    .then(function(d){
+      if (d.success) pollRetrain();
+      else alert(d.error || '启动失败');
+    })
+    .catch(function(e){ alert('启动失败: ' + e); });
+}
+var retrainTimer = null;
+function pollRetrain() {
+  var logBox = document.getElementById('retrainLog');
+  var state = document.getElementById('retrainState');
+  logBox.style.display = 'block';
+  if (retrainTimer) clearInterval(retrainTimer);
+  retrainTimer = setInterval(function() {
+    fetch('/api/retrain/status').then(function(r){ return r.json(); }).then(function(d) {
+      logBox.textContent = (d.log || []).join('\n');
+      if (d.running) { state.textContent = '⏳ 训练中...'; }
+      else {
+        clearInterval(retrainTimer);
+        if (d.error) { state.textContent = '❌ 失败: ' + d.error; logBox.style.color = 'var(--danger)'; }
+        else { state.textContent = '✅ 完成，请重启服务使新模型生效'; logBox.style.color = 'var(--accent)'; }
+      }
+    });
+  }, 1500);
 }
 
 loadDataset();

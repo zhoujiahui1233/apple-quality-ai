@@ -17,3 +17,13 @@ static/uploads/
 .ultralytics/
 .idea/
 .pytest_cache/
+
+# large data dirs (downloaded/generated, not tracked)
+kaggle_data/
+kaggle_data_fruit360/
+yolo_dataset/
+yolo_detect_dataset/
+yolo_detect_output/
+yolo_output/
+archive/
+model_backups/

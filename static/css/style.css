@@ -1,0 +1,6 @@
+body { background: #f5f5f5; }
+.dropzone { cursor: pointer; transition: all 0.3s; }
+.dropzone:hover { background: #e8f5e9 !important; }
+.border-dashed { border-style: dashed !important; }
+.card { border-radius: 10px; overflow: hidden; }
+.card-header { font-weight: 500; }

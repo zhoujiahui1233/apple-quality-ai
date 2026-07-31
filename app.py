@@ -3,6 +3,7 @@ import os
 import sys
 import uuid
 import logging
+import threading
 import logging.handlers
 from datetime import datetime
 from pathlib import Path
@@ -349,6 +350,72 @@ def stats_daily():
                 daily[key]['standard'] += 1
     return jsonify(list(daily.values()))
 
+def _unlabeled_files():
+    """聚合所有未标注图片（平铺 unlabeled/ 与 各品类下的 unlabeled/）"""
+    base = config.ROOT_DIR / "dataset_collected"
+    candidates = [base / "unlabeled"]
+    for cat in ("apple", "bread", "beverage"):
+        candidates.append(base / cat / "unlabeled")
+    files = []
+    for d in candidates:
+        if d.is_dir():
+            for f in sorted(d.iterdir()):
+                if f.is_file() and f.suffix.lower() in (".jpg", ".jpeg", ".png", ".bmp"):
+                    files.append(f)
+    return files
+
+
+@app.route('/annotate')
+def annotate_page():
+    return render_template('annotate.html', active_tab='annotate')
+
+
+@app.route('/api/annotate/queue')
+def annotate_queue():
+    files = _unlabeled_files()
+    items = [{"path": str(f.relative_to(config.ROOT_DIR / "dataset_collected")).replace("\\", "/"),
+              "name": f.name} for f in files]
+    return jsonify({"items": items, "count": len(items)})
+
+
+@app.route('/api/annotate/save', methods=['POST'])
+def annotate_save():
+    import shutil
+    data = request.get_json(silent=True) or {}
+    src_rel = data.get("src", "")
+    category = data.get("category", "")
+    label = data.get("label", "")
+    if not (src_rel and category and label):
+        return jsonify({"error": "参数不完整"}), 400
+    base = config.ROOT_DIR / "dataset_collected"
+    src = base / src_rel
+    if not src.is_file():
+        return jsonify({"error": "文件不存在"}), 404
+    dst_dir = base / category / label
+    dst_dir.mkdir(parents=True, exist_ok=True)
+    ts = datetime.now().strftime("%Y%m%d_%H%M%S_%f")[:-3]
+    dst = dst_dir / f"{label}_{ts}{src.suffix.lower()}"
+    shutil.move(str(src), str(dst))
+    logger.info("标注: %s -> %s/%s/%s", src_rel, category, label, dst.name)
+    return jsonify({"success": True, "filename": dst.name, "remaining": len(_unlabeled_files())})
+
+
+@app.route('/api/annotate/skip', methods=['POST'])
+def annotate_skip():
+    import shutil
+    data = request.get_json(silent=True) or {}
+    src_rel = data.get("src", "")
+    if not src_rel:
+        return jsonify({"error": "参数不完整"}), 400
+    base = config.ROOT_DIR / "dataset_collected"
+    src = base / src_rel
+    if src.is_file():
+        skip_dir = base / "_skipped"
+        skip_dir.mkdir(parents=True, exist_ok=True)
+        shutil.move(str(src), str(skip_dir / src.name))
+    return jsonify({"success": True, "remaining": len(_unlabeled_files())})
+
+
 @app.route('/annotations')
 def browse_annotations():
     import glob, shutil
@@ -581,6 +648,52 @@ def stats_models():
         "grade_accuracy": {},
         "note": "示例数据，请运行 python scripts/run_experiment.py 生成真实实验结果"
     })
+
+
+_retrain_lock = threading.Lock()
+_retrain_thread = None
+
+
+@app.route('/api/retrain', methods=['POST'])
+def api_retrain():
+    global _retrain_thread
+    data = request.get_json(silent=True) or {}
+    category = data.get('category', 'apple')
+    models = data.get('models', ['svm', 'rf'])
+    if _retrain_thread and _retrain_thread.is_alive():
+        return jsonify({'error': '已有训练任务在运行'}), 409
+    status_file = config.INSTANCE_DIR / 'retrain_status.json'
+    status = {'running': True, 'log': [], 'results': None, 'error': None}
+    status_file.write_text(json.dumps(status, ensure_ascii=False), encoding='utf-8')
+
+    def worker():
+        from scripts.retrain import run_retrain
+        def log(msg):
+            status['log'].append(msg)
+            status_file.write_text(json.dumps(status, ensure_ascii=False), encoding='utf-8')
+        try:
+            res = run_retrain(category, models, log=log)
+            status['results'] = res
+            status['log'].append('重训完成！请重启服务使新模型生效。')
+        except Exception as e:
+            status['error'] = str(e)
+        status['running'] = False
+        status_file.write_text(json.dumps(status, ensure_ascii=False), encoding='utf-8')
+
+    _retrain_thread = threading.Thread(target=worker, daemon=True)
+    _retrain_thread.start()
+    return jsonify({'success': True, 'message': '重训已开始，请在数据集页面查看进度'})
+
+
+@app.route('/api/retrain/status')
+def api_retrain_status():
+    status_file = config.INSTANCE_DIR / 'retrain_status.json'
+    if status_file.exists():
+        try:
+            return jsonify(json.loads(status_file.read_text(encoding='utf-8')))
+        except Exception:
+            pass
+    return jsonify({'running': False, 'log': [], 'results': None, 'error': None})
 
 
 if __name__ == '__main__':
