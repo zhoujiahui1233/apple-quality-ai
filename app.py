@@ -3,6 +3,7 @@ import os
 import sys
 import uuid
 import logging
+import logging.handlers
 from datetime import datetime
 from pathlib import Path
 
@@ -30,10 +31,10 @@ os.environ['YOLO_CONFIG_DIR'] = str(config.ROOT_DIR / '.ultralytics')
 
 app = Flask(__name__)
 
-# ==================== ???? ====================
+# ==================== 模型预热 ====================
 def warmup_models():
-    """??????????????"""
-    logger.info("??????...")
+    """启动时预加载所有模型，避免首次检测缓慢"""
+    logger.info("正在加载模型...")
     try:
         load_scaler()
         logger.info("  [OK] Scaler ✓")
@@ -53,7 +54,7 @@ def warmup_models():
         except Exception as e:
             logger.warning(f"  [SKIP] {name}: {e}")
 
-    logger.info("??????")
+    logger.info("模型预热完成")
 
 app.json.ensure_ascii = False
 app.config['SQLALCHEMY_DATABASE_URI'] = config.DATABASE_URI
@@ -153,7 +154,7 @@ def detail(record_id):
 def delete(record_id):
     record = DetectionRecord.query.get_or_404(record_id)
     try:
-        # ????
+        # 删除关联图片文件
         for fname in [record.filename, record.result_filename]:
             if fname:
                 fpath = os.path.join(app.config['UPLOAD_FOLDER'], fname)
@@ -434,6 +435,14 @@ if __name__ == '__main__':
         format=config.LOG_FORMAT,
         datefmt=config.LOG_DATE_FORMAT
     )
+    # 日志文件轮转（单文件最大5MB，保留近3份历史）
+    _log_dir = config.ROOT_DIR / "logs"
+    _log_dir.mkdir(exist_ok=True)
+    _fh = logging.handlers.RotatingFileHandler(
+        _log_dir / "app.log", maxBytes=5 * 1024 * 1024,
+        backupCount=3, encoding="utf-8")
+    _fh.setFormatter(logging.Formatter(config.LOG_FORMAT, config.LOG_DATE_FORMAT))
+    logging.getLogger().addHandler(_fh)
     with app.app_context():
         db.create_all()
     warmup_models()
