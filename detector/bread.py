@@ -53,7 +53,11 @@ class BreadAdapter(CategoryAdapter):
 
     def classify_grade(self, result):
         has_mold = any(d.kind == "mold" for d in result.defects)
-        if has_mold or result.defect_ratio >= config.STANDARD_THRESHOLD:
+        burn_area = sum(d.area for d in result.defects if d.kind == "burn")
+        total_pixels = int(np.sum(result.apple_mask > 0)) or 1
+        burn_ratio = burn_area / total_pixels
+        if (has_mold or result.defect_ratio >= config.STANDARD_THRESHOLD
+                or burn_ratio >= 0.01):
             return GradeResult("reject", "不合格", (0, 0, 255))
         if result.defect_ratio >= config.PREMIUM_THRESHOLD:
             return GradeResult("standard", "合格", (0, 255, 255))

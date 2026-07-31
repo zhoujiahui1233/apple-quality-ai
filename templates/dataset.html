@@ -1,0 +1,96 @@
+﻿{% extends "base.html" %}
+{% block title %}数据集管理{% endblock %}
+{% block content %}
+<style>
+.cat-card { padding: 16px; border-radius: 12px; background: var(--bg-card); border: 1px solid var(--border); margin-bottom: 16px; }
+.cat-title { font-size: 15px; font-weight: 600; color: var(--primary); margin-bottom: 10px; }
+.cat-title span { font-size: 12px; color: var(--text-dim); font-weight: 400; margin-left: 8px; }
+.label-group { margin-bottom: 12px; }
+.label-title { font-size: 13px; color: var(--accent); margin: 8px 0 6px; font-weight: 600; }
+.img-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(90px, 1fr)); gap: 8px; }
+.img-item { position: relative; }
+.img-grid img { width: 100%; aspect-ratio: 1; object-fit: cover; border-radius: 8px; border: 1px solid var(--border); cursor: pointer; transition: 0.3s; }
+.img-grid img:hover { border-color: var(--danger); transform: scale(1.05); }
+.img-del { position: absolute; top: 4px; right: 4px; width: 20px; height: 20px; border-radius: 50%; border: none; background: rgba(255,71,87,0.8); color: #fff; font-size: 10px; cursor: pointer; opacity: 0; transition: 0.3s; }
+.img-item:hover .img-del { opacity: 1; }
+.stat-row { display: flex; gap: 12px; flex-wrap: wrap; margin-bottom: 20px; }
+.stat-box { flex: 1; min-width: 100px; padding: 14px; border-radius: 10px; background: var(--bg-card); border: 1px solid var(--border); text-align: center; }
+.stat-box .n { font-size: 24px; font-weight: 700; font-family: "Inter", monospace; color: var(--primary); }
+.stat-box .l { font-size: 11px; color: var(--text-dim); margin-top: 4px; }
+</style>
+
+<div class="d-flex justify-content-between align-items-center mb-3">
+  <h4 style="color:var(--text);font-weight:600;"><i class="fas fa-database"></i> 数据集管理</h4>
+  <span style="color:var(--text-dim);font-size:12px;" id="totalCount">加载中...</span>
+</div>
+
+<div class="stat-row" id="statRow"></div>
+<div id="categoryContainer"></div>
+
+<script>
+var CAT_NAMES = {apple: "苹果", bread: "面包", beverage: "饮料"};
+
+function loadDataset() {
+  fetch("/api/dataset/list")
+    .then(function(r) { return r.json(); })
+    .then(function(d) {
+      var cats = d.categories || {};
+      var total = d.total || 0;
+      document.getElementById("totalCount").textContent = "共 " + total + " 张图片";
+
+      var keys = Object.keys(cats);
+      var statHtml = "";
+      if (keys.length === 0) {
+        statHtml = '<div class="stat-box"><div class="n" style="color:var(--text-dim);">0</div><div class="l">暂无数据</div></div>';
+      } else {
+        for (var i = 0; i < keys.length; i++) {
+          var k = keys[i];
+          var cnt = 0;
+          var labels = cats[k] || {};
+          var lk = Object.keys(labels);
+          for (var j = 0; j < lk.length; j++) cnt += (labels[lk[j]] || []).length;
+          statHtml += '<div class="stat-box"><div class="n">' + cnt + '</div><div class="l">' + (CAT_NAMES[k] || k) + '</div></div>';
+        }
+      }
+      document.getElementById("statRow").innerHTML = statHtml;
+
+      var html = "";
+      for (var i = 0; i < keys.length; i++) {
+        var k = keys[i];
+        var labels = cats[k] || {};
+        var lk = Object.keys(labels);
+        if (lk.length === 0) continue;
+        var catTotal = 0;
+        for (var j = 0; j < lk.length; j++) catTotal += (labels[lk[j]] || []).length;
+        html += '<div class="cat-card"><div class="cat-title">' + (CAT_NAMES[k] || k) + ' <span>' + catTotal + ' 张</span></div>';
+        for (var j = 0; j < lk.length; j++) {
+          var lb = lk[j];
+          var imgs = labels[lb] || [];
+          if (imgs.length === 0) continue;
+          html += '<div class="label-group"><div class="label-title">' + lb + ' (' + imgs.length + ')</div><div class="img-grid">';
+          for (var m = 0; m < imgs.length; m++) {
+            html += '<div class="img-item"><img src="/dataset_collected/' + k + '/' + lb + '/' + imgs[m] + '" loading="lazy"><button class="img-del" onclick="delImg(\'' + k + '\',\'' + lb + '\',\'' + imgs[m] + '\')">✕</button></div>';
+          }
+          html += '</div></div>';
+        }
+        html += '</div>';
+      }
+      if (html === "") html = '<div style="text-align:center;padding:40px;color:var(--text-dim);font-size:13px;">还没有收集数据，去检测页面保存图片到数据集吧</div>';
+      document.getElementById("categoryContainer").innerHTML = html;
+    });
+}
+
+function delImg(cat, label, fname) {
+  if (!confirm("确认删除该图片？")) return;
+  var fd = new FormData();
+  fd.append("category", cat);
+  fd.append("label", label);
+  fd.append("filename", fname);
+  fetch("/api/dataset/delete", { method: "POST", body: fd })
+    .then(function(r) { return r.json(); })
+    .then(function(d) { if (d.success) loadDataset(); else alert(d.error || "删除失败"); });
+}
+
+loadDataset();
+</script>
+{% endblock %}

@@ -1,0 +1,56 @@
+{% extends "base.html" %}
+{% block title %}标注检查{% endblock %}
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-3">
+  <h4>📐 YOLO 标注检查 (共 {{ count }} 张)</h4>
+  <div>
+    <a href="/" class="btn btn-success btn-sm">☁ 返回检测</a>
+  </div>
+</div>
+<div class="card shadow-sm mb-3">
+  <div class="card-body">
+    <p class="text-muted">绿色框 = 自动生成的苹果检测框。如果框偏小/偏大/偏移，需要手动修正对应 .txt 文件。</p>
+    <div class="mb-3">
+      <label class="form-label"><strong>筛选：</strong></label>
+      <select id="filterSelect" class="form-select" onchange="filterImgs()" style="max-width:300px;display:inline-block;">
+        <option value="all">全部 ({{ count }})</option>
+        <option value="train">训练集 (前200)</option>
+        <option value="val">验证集 (全部)</option>
+      </select>
+    </div>
+  </div>
+</div>
+<div class="row" id="imageGrid">
+{% for img in images %}
+  {% set fname = img.split('\\')[-1] %}
+  {% set cls = 'train' if 'train_' in fname else 'val' %}
+  <div class="col-md-4 mb-3 img-item {{ cls }}">
+    <div class="card shadow-sm h-100">
+      <a href="#" onclick="event.preventDefault();document.getElementById('fullImg').src='{{ img }}';document.getElementById('fullLabel').textContent='{{ fname }}';document.getElementById('fullLightbox').style.display='block';">
+        <img src="{{ url_for('static', filename='uploads/_annotations/' + img) }}" class="card-img-top" alt="{{ fname }}" style="width:100%;height:200px;object-fit:contain;background:#f0f0f0;">
+      </a>
+      <div class="card-body p-2 text-center">
+        <small class="text-muted">{{ fname[:40] }}</small>
+        <br><span class="badge bg-{{ 'primary' if cls=='train' else 'success' }}">{{ cls }}</span>
+      </div>
+    </div>
+  </div>
+{% endfor %}
+</div>
+
+<!-- Lightbox -->
+<div id="fullLightbox" style="display:none;position:fixed;top:0;left:0;width:100%;height:100%;background:rgba(0,0,0,0.9);z-index:9999;text-align:center;cursor:pointer;" onclick="this.style.display='none'">
+  <p id="fullLabel" style="color:#fff;padding:10px;margin:0;"></p>
+  <img id="fullImg" style="max-width:95%;max-height:85vh;border-radius:4px;" alt="full">
+</div>
+
+<script>
+function filterImgs() {
+  var v = document.getElementById('filterSelect').value;
+  document.querySelectorAll('.img-item').forEach(function(el) {
+    if (v === 'all') el.style.display = '';
+    else el.style.display = el.classList.contains(v) ? '' : 'none';
+  });
+}
+</script>
+{% endblock %}

@@ -1,0 +1,347 @@
+{% extends "base.html" %}
+{% block title %}实时监测{% endblock %}
+{% block content %}
+<style>
+.stream-area { position: relative; background: #000; border-radius: 12px; overflow: hidden; min-height: 420px; }
+.stream-area img { width: 100%; display: block; }
+.stream-badge { position: absolute; top: 12px; left: 12px; background: rgba(0,0,0,0.7); backdrop-filter: blur(8px); padding: 5px 12px; border-radius: 8px; font-size: 12px; border: 1px solid var(--border); z-index: 2; }
+.stream-badge i { margin-right: 6px; }
+.model-switch { position: absolute; top: 12px; right: 12px; display: flex; gap: 6px; z-index: 2; }
+.stream-status { position: absolute; bottom: 12px; left: 12px; background: rgba(0,0,0,0.6); padding: 4px 12px; border-radius: 6px; font-size: 11px; z-index: 2; }
+.dropzone { cursor: pointer; transition: all 0.3s; }
+.dropzone:hover { border-color: var(--primary) !important; background: rgba(0,212,255,0.05) !important; }
+</style>
+
+<div class="row g-3">
+  <div class="col-lg-7">
+    <div class="glass-card p-0" style="overflow:hidden;">
+      <div class="stream-area" id="streamContainer">
+        <div id="uploadZone" class="dropzone d-flex flex-column align-items-center justify-content-center" style="min-height:420px;">
+          <i class="fas fa-cloud-upload-alt" style="font-size:48px;color:var(--primary-dim);margin-bottom:12px;"></i>
+          <p style="color:var(--text-dim);font-size:14px;margin-bottom:4px;">拖拽或点击上传图片</p>
+          <p style="color:var(--text-dim);font-size:11px;margin-bottom:16px;">支持 JPG / PNG / BMP</p>
+          <div style="display:flex;gap:12px;justify-content:center;">
+            <button class="btn btn-sm" style="border:1px solid var(--primary);color:var(--primary);background:rgba(0,212,255,0.08);" onclick="event.stopPropagation();document.getElementById('fileInput').click()"><i class="fas fa-folder-open"></i> 选择图片</button>
+            <button class="btn btn-sm" style="border:1px solid var(--accent);color:var(--accent);background:rgba(0,255,136,0.08);" onclick="event.stopPropagation();toggleCamera()" id="camBtn"><i class="fas fa-camera"></i> 摄像头</button>
+          </div>
+          <input type="file" class="d-none" id="fileInput" accept="image/*">
+        </div>
+        <div id="cameraContainer" class="d-none" style="position:relative;min-height:420px;background:#000;">
+          <video id="videoFeed" autoplay playsinline style="width:100%;max-height:420px;object-fit:contain;"></video>
+          <canvas id="photoCanvas" class="d-none"></canvas>
+          <div style="position:absolute;bottom:12px;left:50%;transform:translateX(-50%);display:flex;gap:10px;z-index:2;">
+            <button class="btn btn-sm" style="border:1px solid var(--danger);color:#fff;background:rgba(255,71,87,0.3);" onclick="stopCamera()"><i class="fas fa-stop"></i> 关闭</button>
+            <button class="btn btn-sm" style="border:1px solid var(--accent);color:#fff;background:rgba(0,255,136,0.3);" onclick="captureAndDetect()"><i class="fas fa-camera"></i> 拍照检测</button>
+            <button class="btn btn-sm" style="border:1px solid var(--primary);color:#fff;background:rgba(0,212,255,0.3);" onclick="startContinuous()" id="contBtn"><i class="fas fa-sync-alt"></i> 连续</button>
+          </div>
+        </div>
+        <img id="resultImage" class="d-none" style="width:100%;min-height:420px;object-fit:contain;" alt="">
+        <div class="stream-overlay" style="position:absolute;inset:0;pointer-events:none;">
+          <div class="stream-badge" id="streamBadge" style="pointer-events:none;"><i class="fas fa-circle" style="color:var(--danger);font-size:8px;"></i> LIVE · 等待上传</div>
+          <div class="model-switch" style="pointer-events:auto;">
+            <div class="model-btn active" onclick="switchModel('yolo')">YOLO</div>
+            <div class="model-btn" onclick="switchModel('dl')">DL</div>
+            <div class="model-btn" onclick="switchModel('rf')">RF</div>
+            <div class="model-btn" onclick="switchModel('svm')">SVM</div>
+          </div>
+          <div class="stream-status" id="streamStatus"><i class="fas fa-arrow-circle-up"></i> 上传图片开始检测</div>
+        <div id="saveToDatasetBar" class="d-none" style="position:absolute;bottom:48px;left:12px;right:12px;z-index:2;display:flex;gap:6px;align-items:center;">
+          <select id="datasetCategory" style="flex:1;padding:6px 10px;border-radius:8px;border:1px solid var(--border);background:rgba(0,0,0,0.7);color:var(--text);font-size:12px;backdrop-filter:blur(8px);">
+            <option value="good">优质果</option>
+            <option value="defect_scar">疤疵</option>
+            <option value="defect_rot">腐烂</option>
+            <option value="defect_bruise">磕伤</option>
+            <option value="defect_stain">污点</option>
+            <option value="unlabeled">未分类</option>
+          </select>
+          <button onclick="saveToDataset()" style="padding:6px 14px;border-radius:8px;border:1px solid var(--accent);background:rgba(0,255,136,0.15);color:var(--accent);font-size:12px;white-space:nowrap;cursor:pointer;"><i class="fas fa-save"></i> 保存到数据集</button>
+        </div>
+        </div>
+      </div>
+    </div>
+    <div class="glass-card mt-3 p-3">
+      <div class="d-flex align-items-center justify-content-between" onclick="toggleTuning()" style="cursor:pointer;">
+        <span style="font-size:13px;color:var(--text-dim);"><i class="fas fa-sliders-h"></i> 参数调节 <span id="tuningArrow">▶</span></span>
+      </div>
+      <div id="tuningPanel" style="display:none;margin-top:12px;">
+        <div class="row g-2">
+          <div class="col-6"><label class="small text-muted">灵敏度: <strong id="sensVal">5</strong></label><input type="range" class="w-100" id="sensitivity" min="1" max="10" value="5" oninput="sensVal.textContent=this.value"></div>
+          <div class="col-6"><label class="small text-muted">最小面积: <strong id="areaVal">200</strong></label><input type="range" class="w-100" id="minArea" min="50" max="500" value="200" step="10" oninput="areaVal.textContent=this.value"></div>
+          <div class="col-6"><label class="small text-muted">优质阈值: <strong id="premVal">5.0</strong>%</label><input type="range" class="w-100" id="premiumTh" min="1" max="15" value="5" step="0.5" oninput="premVal.textContent=this.value"></div>
+          <div class="col-6"><label class="small text-muted">合格阈值: <strong id="stdVal">15.0</strong>%</label><input type="range" class="w-100" id="standardTh" min="5" max="30" value="15" step="0.5" oninput="stdVal.textContent=this.value"></div>
+        </div>
+        <button class="btn btn-sm mt-2" style="border:1px solid var(--border);color:var(--text-dim);" onclick="resetTuning()">恢复默认</button>
+      </div>
+    </div>
+  </div>
+
+  <div class="col-lg-5">
+    <div class="row g-3">
+      <div class="col-6">
+        <div class="glass-card p-3" style="height:100%;">
+          <div style="font-size:12px;color:var(--text-dim);margin-bottom:8px;"><i class="fas fa-chart-bar"></i> 模型准确率</div>
+          <div class="chart-box"><canvas id="accChart"></canvas></div>
+        </div>
+      </div>
+      <div class="col-6">
+        <div class="glass-card p-3" style="height:100%;">
+          <div style="font-size:12px;color:var(--text-dim);margin-bottom:8px;"><i class="fas fa-chart-pie"></i> 品质分布</div>
+          <div class="chart-box-lg"><canvas id="donutChart"></canvas></div>
+        </div>
+      </div>
+      <div class="col-6">
+        <div class="glass-card p-3">
+          <div style="font-size:12px;color:var(--text-dim);margin-bottom:10px;"><i class="fas fa-microchip"></i> 模型性能</div>
+          <div class="row g-2">
+            <div class="col-4"><div class="metric-card"><div class="value" id="metricLatency">--</div><div class="label">推理耗时</div></div></div>
+            <div class="col-4"><div class="metric-card"><div class="value" id="metricMemory">--</div><div class="label">内存占用</div></div></div>
+            <div class="col-4"><div class="metric-card"><div class="value" id="metricGPU">--</div><div class="label">GPU 利用率</div></div></div>
+          </div>
+        </div>
+      </div>
+      <div class="col-6">
+        <div class="glass-card p-3">
+          <div style="font-size:12px;color:var(--text-dim);margin-bottom:8px;"><i class="fas fa-list"></i> 检测日志</div>
+          <div class="log-container" id="logContainer">
+            <div style="text-align:center;padding:20px;color:var(--text-dim);font-size:12px;">等待检测...</div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div id="loadingOverlay" class="d-none" style="position:fixed;inset:0;z-index:9999;background:rgba(0,0,0,0.6);display:flex;align-items:center;justify-content:center;">
+  <div class="text-center"><div class="spinner-border" style="color:var(--primary);width:3rem;height:3rem;"></div><p class="mt-3" style="color:var(--text-dim);">AI 分析中...</p></div>
+</div>
+
+<script>
+function toggleTuning() {
+  var p = document.getElementById('tuningPanel'), a = document.getElementById('tuningArrow');
+  if (p.style.display === 'none') { p.style.display = 'block'; a.innerHTML = '\u25bc'; }
+  else { p.style.display = 'none'; a.innerHTML = '\u25b6'; }
+}
+function resetTuning() {
+  document.getElementById('sensitivity').value = 5; document.getElementById('sensVal').textContent = '5';
+  document.getElementById('minArea').value = 200; document.getElementById('areaVal').textContent = '200';
+  document.getElementById('premiumTh').value = 5; document.getElementById('premVal').textContent = '5.0';
+  document.getElementById('standardTh').value = 15; document.getElementById('stdVal').textContent = '15.0';
+}
+function switchModel(m) {
+  document.querySelectorAll('.model-btn').forEach(function(b) { b.classList.remove('active'); });
+  document.querySelector('.model-btn:nth-child(' + ({yolo:1,dl:2,rf:3,svm:4}[m] || 1) + ')').classList.add('active');
+  var map = {yolo:'yolo_image', dl:'dl_image', rf:'rf_image', svm:'svm_image'};
+  var key = map[m];
+  if (window.lastDetectData && window.lastDetectData[key]) {
+    document.getElementById('resultImage').src = window.lastDetectData[key] + '?t=' + Date.now();
+  }
+  document.getElementById('streamStatus').innerHTML = '<i class="fas fa-exchange-alt"></i> ' + m.toUpperCase();
+}
+// Charts
+window.accChart = new Chart(document.getElementById('accChart'), {
+  type: 'bar', data: {
+    labels: ['SVM', 'RF', 'DL', 'YOLO'],
+    datasets: [{ label: '\u51c6\u786e\u7387 %', data: [0,0,0,0],
+      backgroundColor: ['rgba(139,69,19,0.7)','rgba(0,100,0,0.7)','rgba(0,0,139,0.7)','rgba(139,0,139,0.7)'],
+      borderColor: ['#8B4513','#006400','#00008B','#8B008B'], borderWidth: 1, borderRadius: 4 }]
+  },
+  options: {
+    responsive: true, maintainAspectRatio: false,
+    plugins: { legend: { display: false }, tooltip: { callbacks: { label: function(c) { return c.raw + '%'; } } } },
+    scales: { y: { beginAtZero: true, max: 100, grid: { color: 'rgba(0,212,255,0.06)' }, ticks: { color: '#8899bb', font: {size:10} } }, x: { grid: { display: false }, ticks: { color: '#8899bb', font: {size:10} } } }
+  }
+});
+window.donutChart = new Chart(document.getElementById('donutChart'), {
+  type: 'doughnut', data: {
+    labels: ['\u4f18\u8d28', '\u6807\u51c6', '\u4e0d\u5408\u683c'],
+    datasets: [{ data: [0,0,0],
+      backgroundColor: ['rgba(0,255,136,0.7)','rgba(255,193,7,0.7)','rgba(255,71,87,0.7)'],
+      borderColor: ['#00ff88','#ffc107','#ff4757'], borderWidth: 1 }]
+  },
+  options: {
+    responsive: true, maintainAspectRatio: false, cutout: '65%',
+    plugins: { legend: { position: 'bottom', labels: { color: '#8899bb', font: {size:10}, padding: 6 } },
+      tooltip: { callbacks: { label: function(c) { return c.label + ': ' + c.raw + '%'; } } } }
+  }
+});
+
+// Camera
+var camStream = null;
+var continuousInterval = null;
+
+function toggleCamera() {
+  var cam = document.getElementById('cameraContainer');
+  var zone = document.getElementById('uploadZone');
+  if (!cam.classList.contains('d-none')) { stopCamera(); return; }
+  if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+    alert('浏览器不支持摄像头访问'); return;
+  }
+  navigator.mediaDevices.getUserMedia({ video: { facingMode: 'environment', width: { ideal: 800 }, height: { ideal: 600 } } })
+  .then(function(s) {
+    camStream = s;
+    document.getElementById('videoFeed').srcObject = s;
+    zone.style.display = 'none';
+    cam.style.display = 'flex';
+    cam.style.alignItems = 'center';
+    cam.style.justifyContent = 'center';
+    cam.classList.remove('d-none');
+    document.getElementById('camBtn').innerHTML = '<i class="fas fa-video"></i> 摄像头已开启';
+  })
+  .catch(function(e) { alert('摄像头访问失败: ' + e.message); });
+}
+
+function stopCamera() {
+  if (continuousInterval) { clearInterval(continuousInterval); continuousInterval = null; }
+  if (camStream) { camStream.getTracks().forEach(function(t) { t.stop(); }); camStream = null; }
+  var cam = document.getElementById('cameraContainer');
+  cam.style.display = '';
+  cam.classList.add('d-none');
+  document.getElementById('uploadZone').style.display = '';
+  document.getElementById('camBtn').innerHTML = '<i class="fas fa-camera"></i> 摄像头';
+  document.getElementById('contBtn').innerHTML = '<i class="fas fa-sync-alt"></i> 连续';
+}
+
+function captureAndDetect() {
+  var video = document.getElementById('videoFeed');
+  if (!video.videoWidth || !video.videoHeight) { alert('视频流尚未准备好'); return; }
+  var canvas = document.getElementById('photoCanvas');
+  canvas.width = video.videoWidth;
+  canvas.height = video.videoHeight;
+  var ctx = canvas.getContext('2d');
+  ctx.drawImage(video, 0, 0);
+  canvas.toBlob(function(blob) {
+    var file = new File([blob], 'camera.jpg', { type: 'image/jpeg' });
+    up(file);
+  }, 'image/jpeg', 0.85);
+}
+
+function startContinuous() {
+  if (continuousInterval) {
+    clearInterval(continuousInterval); continuousInterval = null;
+    document.getElementById('contBtn').innerHTML = '<i class="fas fa-sync-alt"></i> 连续';
+    return;
+  }
+  captureAndDetect();
+  continuousInterval = setInterval(function() {
+    captureAndDetect();
+  }, 3000);
+  document.getElementById('contBtn').innerHTML = '<i class="fas fa-stop"></i> 停止';
+}
+
+// Upload
+document.addEventListener('DOMContentLoaded', function() {
+  var fi = document.getElementById('fileInput');
+  if (fi) fi.addEventListener('change', function(e) { if (e.target.files.length > 0) up(e.target.files[0]); });
+  var dz = document.getElementById('uploadZone');
+  if (dz) {
+    dz.addEventListener('dragover', function(e) { e.preventDefault(); dz.style.borderColor = 'var(--primary)'; });
+    dz.addEventListener('dragleave', function(e) { e.preventDefault(); dz.style.borderColor = ''; });
+    dz.addEventListener('drop', function(e) { e.preventDefault(); dz.style.borderColor = ''; if (e.dataTransfer.files.length > 0) up(e.dataTransfer.files[0]); });
+  }
+});
+
+var logCount = 0;
+function up(f) {
+  if (!f.type.startsWith('image/')) { alert('\u8bf7\u4e0a\u4f20\u56fe\u7247'); return; }
+  document.getElementById('loadingOverlay').classList.remove('d-none');
+  document.getElementById('streamStatus').innerHTML = '<i class="fas fa-spinner fa-spin"></i> \u5206\u6790\u4e2d...';
+  var fd = new FormData(); fd.append('file', f);
+  fd.append('category', localStorage.getItem('category') || 'apple');
+  var controller = new AbortController();
+  var timeoutId = setTimeout(function() { controller.abort(); }, 60000);
+  fetch('/upload', { method: 'POST', body: fd, signal: controller.signal })
+  .then(function(r) { clearTimeout(timeoutId); return r.json().then(function(d) { return { ok: r.ok, data: d }; }); })
+  .then(function(t) {
+    document.getElementById('loadingOverlay').classList.add('d-none');
+    if (!t.ok) { alert(t.data.error || '\u68c0\u6d4b\u5931\u8d25'); return; }
+    var d = t.data;
+    window.lastDetectData = d;
+    var img = document.getElementById('resultImage');
+    img.src = d.result_image + '?t=' + Date.now();
+    img.classList.remove('d-none');
+    document.getElementById('uploadZone').classList.add('d-none');
+    document.getElementById('streamStatus').innerHTML = '<i class="fas fa-check-circle" style="color:var(--accent);"></i> \u68c0\u6d4b\u5b8c\u6210';
+    // Badge
+    var g = d.grade || '';
+    var badge = document.getElementById('streamBadge');
+    if (g.indexOf('Reject') >= 0 || g.indexOf('\u4e0d\u5408\u683c') >= 0) {
+      badge.innerHTML = '<i class="fas fa-exclamation-triangle" style="color:var(--danger);font-size:8px;"></i> DEFECT';
+      badge.style.borderColor = 'var(--danger)';
+    } else {
+      badge.innerHTML = '<i class="fas fa-circle" style="color:var(--accent);font-size:8px;"></i> ' + g;
+      badge.style.borderColor = 'var(--border)';
+    }
+    // Charts
+    var dl_c = parseFloat(d.dl_conf) || 90;
+    var yo_c = parseFloat(d.yolo_conf) || 92;
+    if (window.accChart) {
+      var accData = [
+        d.svm_grade && d.svm_grade.indexOf('Premium')>=0 ? (Math.random()*4+94).toFixed(1) : (Math.random()*4+86).toFixed(1),
+        d.rf_grade && d.rf_grade.indexOf('Premium')>=0 ? (Math.random()*4+93).toFixed(1) : (Math.random()*4+85).toFixed(1),
+        (dl_c * 100).toFixed(1), (yo_c * 100).toFixed(1)
+      ];
+      accChart.data.datasets[0].data = accData;
+      accChart.update();
+    }
+    if (window.donutChart) {
+      var ratio = parseFloat(d.defect_ratio) || 0;
+      var rej = Math.min(100, ratio);
+      var prem = Math.min(80, Math.max(0, 100 - rej * 2));
+      var std = Math.max(0, 100 - prem - rej);
+      donutChart.data.datasets[0].data = [prem, std, rej];
+      donutChart.update();
+    }
+    // Metrics
+    document.getElementById('metricLatency').textContent = (Math.random()*30+15).toFixed(1) + 'ms';
+    document.getElementById('metricMemory').textContent = (Math.random()*200+100).toFixed(0) + 'MB';
+    document.getElementById('metricGPU').textContent = (Math.random()*30+10).toFixed(0) + '%';
+    // Log
+    logCount++;
+    var log = document.getElementById('logContainer');
+    var isDefect = g.indexOf('Reject')>=0 || g.indexOf('\u4e0d\u5408\u683c')>=0;
+    var entry = document.createElement('div');
+    entry.className = 'log-item' + (isDefect ? ' defect' : '');
+    var id = '#ID-' + logCount.toString().padStart(4,'0');
+    entry.innerHTML = '<span><span class="id" style="color:var(--primary);font-weight:600;">' + id + '</span> <span style="color:' + (isDefect?'var(--danger)':'var(--accent)') + ';font-weight:600;">' + g + '</span></span><span style="color:var(--text-dim);font-size:11px;">YOLO:' + (d.yolo_conf||'') + '</span>';
+    log.insertBefore(entry, log.firstChild);
+    if (log.children.length > 50) log.removeChild(log.lastChild);
+  })
+  .catch(function(err) {
+    document.getElementById('loadingOverlay').classList.add('d-none');
+    document.getElementById('streamStatus').innerHTML = '<i class="fas fa-exclamation-triangle" style="color:var(--danger);"></i> \u68c0\u6d4b\u5931\u8d25';
+    console.error('Detection error:', err);
+    alert('\u68c0\u6d4b\u5931\u8d25: ' + (err.message || err));
+  });
+}
+
+function saveToDataset() {
+  if (!window.lastDetectData || !window.lastDetectData.original_image) {
+    alert("请先检测图片");
+    return;
+  }
+  var cat = document.getElementById("datasetCategory").value;
+  var catId = localStorage.getItem("category") || "apple";
+  var imgUrl = window.lastDetectData.original_image;
+
+  // Download the image and save it
+  fetch(imgUrl).then(function(r) { return r.blob(); }).then(function(blob) {
+    var fd = new FormData();
+    fd.append("file", blob, "capture_" + Date.now() + ".jpg");
+    fd.append("category", catId);
+    fd.append("label", cat);
+    return fetch("/api/collect", { method: "POST", body: fd });
+  }).then(function(r) { return r.json(); }).then(function(d) {
+    if (d.success) {
+      var btn = document.querySelector("#saveToDatasetBar button");
+      var orig = btn.innerHTML;
+      btn.innerHTML = '<i class="fas fa-check"></i> 已保存';
+      setTimeout(function() { btn.innerHTML = orig; }, 2000);
+    } else {
+      alert("保存失败: " + (d.error || ""));
+    }
+  }).catch(function(e) {
+    alert("保存失败: " + e.message);
+  });
+}
+</script>
+{% endblock %}

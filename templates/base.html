@@ -1,0 +1,221 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
+<meta http-equiv="Pragma" content="no-cache">
+<meta http-equiv="Expires" content="0">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>智果 · AI品控系统</title>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css">
+<link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+<link rel="manifest" href="/manifest.json">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<script src=https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js></script>
+<script>if(typeof Chart==='undefined'){document.write('<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.0/chart.umd.min.js"><' + '/script>');}</script>
+<style>
+:root {
+  --bg-dark: #0a0e1a;
+  --bg-card: rgba(18, 28, 50, 0.85);
+  --bg-sidebar: rgba(10, 16, 30, 0.95);
+  --primary: #00d4ff;
+  --primary-dim: rgba(0, 212, 255, 0.15);
+  --accent: #00ff88;
+  --accent-dim: rgba(0, 255, 136, 0.12);
+  --warning: #ffc107;
+  --danger: #ff4757;
+  --text: #e8edf5;
+  --text-dim: #8899bb;
+  --border: rgba(0, 212, 255, 0.18);
+  --glow: 0 0 20px rgba(0, 212, 255, 0.15);
+}
+* { margin: 0; padding: 0; box-sizing: border-box; }
+body {
+  font-family: 'Inter', -apple-system, 'Source Han Sans SC', 'Microsoft YaHei', sans-serif;
+  background: var(--bg-dark);
+  color: var(--text);
+  overflow: hidden; height: 100vh;
+}
+.bg-grid {
+  position: fixed; inset: 0; z-index: 0;
+  background-image: linear-gradient(rgba(0,212,255,0.04) 1px, transparent 1px), linear-gradient(90deg, rgba(0,212,255,0.04) 1px, transparent 1px);
+  background-size: 40px 40px;
+}
+.bg-grid::after {
+  content: ''; position: fixed; inset: 0;
+  background: radial-gradient(ellipse at 20% 50%, rgba(0,212,255,0.06) 0%, transparent 60%),
+              radial-gradient(ellipse at 80% 20%, rgba(0,255,136,0.04) 0%, transparent 50%);
+  pointer-events: none;
+}
+.content-wrapper { position: relative; z-index: 1; height: 100vh; display: flex; }
+.sidebar {
+  width: 220px; min-width: 220px;
+  background: var(--bg-sidebar);
+  border-right: 1px solid var(--border);
+  backdrop-filter: blur(20px);
+  display: flex; flex-direction: column;
+}
+.sidebar-logo {
+  padding: 24px 20px 20px;
+  border-bottom: 1px solid var(--border);
+  display: flex; align-items: center; gap: 10px;
+}
+.sidebar-logo i { font-size: 32px; color: var(--primary); text-shadow: var(--glow); }
+.sidebar-logo span { font-size: 18px; font-weight: 700; background: linear-gradient(135deg, var(--primary), var(--accent)); -webkit-background-clip: text; -webkit-text-fill-color: transparent; }
+.sidebar-nav { flex: 1; padding: 16px 12px; display: flex; flex-direction: column; gap: 4px; }
+.sidebar-nav a {
+  display: flex; align-items: center; gap: 12px;
+  padding: 12px 16px; border-radius: 10px;
+  color: var(--text-dim); text-decoration: none; font-size: 14px; font-weight: 500;
+  transition: all 0.3s; position: relative;
+}
+.sidebar-nav a i { width: 20px; text-align: center; font-size: 16px; }
+.sidebar-nav a:hover, .sidebar-nav a.active { background: var(--primary-dim); color: var(--primary); }
+.sidebar-nav a.active::before {
+  content: ''; position: absolute; left: -12px; top: 50%; transform: translateY(-50%);
+  width: 3px; height: 20px; background: var(--primary); border-radius: 0 3px 3px 0;
+  box-shadow: 0 0 10px var(--primary);
+}
+.main-area { flex: 1; display: flex; flex-direction: column; overflow: hidden; }
+.topbar {
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 12px 28px; border-bottom: 1px solid var(--border);
+  backdrop-filter: blur(12px); background: rgba(10, 14, 26, 0.7);
+}
+.topbar-tabs { display: flex; gap: 2px; }
+.topbar-tabs a {
+  padding: 8px 20px; border-radius: 8px 8px 0 0;
+  color: var(--text-dim); text-decoration: none; font-size: 13px; font-weight: 500;
+  transition: all 0.3s; border-bottom: 2px solid transparent;
+}
+.topbar-tabs a:hover, .topbar-tabs a.active { color: var(--primary); border-bottom-color: var(--primary); background: var(--primary-dim); }
+.topbar-right { display: flex; align-items: center; gap: 20px; font-size: 13px; color: var(--text-dim); }
+.topbar-right .time { font-weight: 600; color: var(--text); font-family: 'Inter', monospace; }
+.topbar-right .avatar {
+  width: 32px; height: 32px; border-radius: 50%;
+  background: linear-gradient(135deg, var(--primary), var(--accent));
+  display: flex; align-items: center; justify-content: center;
+  font-size: 14px; color: var(--bg-dark); font-weight: 700;
+}
+.glass-card {
+  background: var(--bg-card); border: 1px solid var(--border);
+  border-radius: 14px; backdrop-filter: blur(16px);
+  box-shadow: var(--glow);
+}
+@keyframes pulse-glow {
+  0%, 100% { box-shadow: 0 0 8px rgba(0,212,255,0.3); }
+  50% { box-shadow: 0 0 25px rgba(0,212,255,0.6); }
+}
+@keyframes flash-red {
+  0%, 100% { border-color: var(--danger); background: rgba(255,71,87,0.1); }
+  50% { border-color: transparent; background: transparent; }
+}
+.flash-defect { animation: flash-red 0.8s ease-in-out 3; }
+.model-btn {
+  width: 46px; height: 46px; border-radius: 50%; border: 2px solid var(--border);
+  background: rgba(10,14,26,0.8); backdrop-filter: blur(8px);
+  color: var(--text-dim); display: flex; align-items: center; justify-content: center;
+  cursor: pointer; transition: all 0.4s; font-size: 10px; font-weight: 600;
+}
+.model-btn:hover { border-color: var(--primary); color: var(--primary); }
+.model-btn.active { border-color: var(--primary); color: var(--primary); box-shadow: 0 0 20px rgba(0,212,255,0.4); animation: pulse-glow 2s infinite; }
+.log-container { height: 180px; overflow-y: auto; font-size: 12px; }
+.log-item { padding: 5px 8px; border-radius: 4px; margin-bottom: 2px; display: flex; justify-content: space-between; border-left: 3px solid var(--accent); background: rgba(0,255,136,0.04); }
+.log-item.defect { border-left-color: var(--danger); background: rgba(255,71,87,0.06); }
+.chart-box { position: relative; height: 140px; width: 100%; }
+.chart-box-lg { position: relative; height: 180px; width: 100%; }
+.metric-card { padding: 12px; border-radius: 10px; background: rgba(0,212,255,0.04); border: 1px solid rgba(0,212,255,0.1); text-align: center; }
+.metric-card .value { font-size: 20px; font-weight: 700; font-family: 'Inter', monospace; color: var(--primary); }
+.metric-card .label { font-size: 11px; color: var(--text-dim); margin-top: 4px; }
+
+/* ==================== 移动端响应式 ==================== */
+@media (max-width: 768px) {
+  .sidebar { display: none; }
+  .mobile-topbar { display: flex !important; }
+  .main-area { margin-left: 0; }
+  .topbar { padding: 8px 12px; }
+  .topbar-tabs a { padding: 6px 10px; font-size: 11px; }
+  .topbar-right .time { font-size: 11px; }
+  .topbar-right .avatar { width: 28px; height: 28px; font-size: 12px; }
+  .model-btn { width: 40px; height: 40px; font-size: 9px; }
+}
+@media (max-width: 576px) {
+  .topbar-tabs a { padding: 4px 8px; font-size: 10px; }
+  .topbar-tabs a i { display: none; }
+  .topbar-right span:first-child { display: none; }
+  .stream-area { min-height: 280px !important; }
+}
+</style>
+</head>
+<body>
+<div class="bg-grid"></div>
+<div class="content-wrapper">
+  <div class="sidebar">
+    <div class="sidebar-logo"><i class="fas fa-apple-alt"></i><span>智果 · AI<br>品控系统</span></div>
+    <div class="sidebar-nav">
+      <a href="/" class="{{"active" if active_tab=="monitor" else ""}}"><i class="fas fa-camera"></i>实时监测</a>
+      <a href="/history" class="{{"active" if active_tab=="history" else ""}}"><i class="fas fa-history"></i>历史数据</a>
+      <a href="/stats" class="{{"active" if active_tab=="stats" else ""}}"><i class="fas fa-chart-bar"></i>数据统计</a>
+      <a href="/dataset"><i class="fas fa-database"></i>数据集</a>
+      <a href="#"><i class="fas fa-cube"></i>模型管理</a>
+      <a href="#"><i class="fas fa-cog"></i>系统设置</a>
+    </div>
+    <div class="sidebar-footer" style="padding:16px 12px;border-top:1px solid var(--border);font-size:11px;color:var(--text-dim);">
+      <div>v2.0 · AI品控系统</div>
+      <div style="margin-top:4px;"><span style="color:var(--accent);">●</span> 系统运行中</div>
+    </div>
+  </div>
+  <div class="main-area">
+    <div class="topbar">
+      <div class="topbar-tabs">
+        <a href="/" class="{{"active" if active_tab=="monitor" else ""}}"><i class="fas fa-camera"></i> 实时监测</a>
+        <a href="/history" class="{{"active" if active_tab=="history" else ""}}"><i class="fas fa-history"></i> 历史数据</a>
+        <a href="/stats" class="{{"active" if active_tab=="stats" else ""}}"><i class="fas fa-chart-bar"></i> 数据统计</a>
+        <a href="/significance" class="{{"active" if active_tab=="significance" else ""}}"><i class="fas fa-flask"></i> 显著性分析</a>
+        <a href="#"><i class="fas fa-cube"></i> 模型管理</a>
+        <a href="#"><i class="fas fa-cog"></i> 系统设置</a>
+      </div>
+      <div class="category-switch" style="display:flex;gap:6px;margin-left:12px;">
+        <button class="cat-btn active" data-cat="apple" onclick="switchCategory('apple')" style="padding:4px 10px;border-radius:8px;border:1px solid var(--border);background:rgba(0,212,255,0.06);color:var(--text-dim);font-size:12px;cursor:pointer;">🍎 苹果</button>
+        <button class="cat-btn" data-cat="bread" onclick="switchCategory('bread')" style="padding:4px 10px;border-radius:8px;border:1px solid var(--border);background:rgba(0,212,255,0.06);color:var(--text-dim);font-size:12px;cursor:pointer;">🍞 面包</button>
+        <button class="cat-btn" data-cat="beverage" onclick="switchCategory('beverage')" style="padding:4px 10px;border-radius:8px;border:1px solid var(--border);background:rgba(0,212,255,0.06);color:var(--text-dim);font-size:12px;cursor:pointer;">🥤 饮料</button>
+      </div>
+      <div class="topbar-right">
+        <span><i class="fas fa-cloud-sun"></i> 26&deg;C</span>
+        <span class="time" id="headerTime">--:--:--</span>
+        <div class="avatar">A</div>
+      </div>
+    </div>
+    <div style="flex:1;overflow-y:auto;padding:20px 24px;">
+      {% block content %}{% endblock %}
+    </div>
+  </div>
+</div>
+<script>
+function updateClock() {
+  var d = new Date();
+  document.getElementById("headerTime").textContent = d.toLocaleTimeString("zh-CN", {hour12:false});
+}
+setInterval(updateClock, 1000);
+updateClock();
+</script>
+
+<!-- 移动端底部导航 -->
+<div class="mobile-bottom-nav" style="display:none;position:fixed;bottom:0;left:0;right:0;z-index:1000;background:var(--bg-sidebar);border-top:1px solid var(--border);backdrop-filter:blur(20px);padding:4px 0;justify-content:space-around;">
+  <a href="/" style="flex:1;text-align:center;padding:6px 0;color:var(--text-dim);text-decoration:none;font-size:10px;"><i class="fas fa-camera" style="display:block;font-size:18px;margin-bottom:2px;"></i>实时</a>
+  <a href="/history" style="flex:1;text-align:center;padding:6px 0;color:var(--text-dim);text-decoration:none;font-size:10px;"><i class="fas fa-history" style="display:block;font-size:18px;margin-bottom:2px;"></i>历史</a>
+  <a href="/stats" style="flex:1;text-align:center;padding:6px 0;color:var(--text-dim);text-decoration:none;font-size:10px;"><i class="fas fa-chart-bar" style="display:block;font-size:18px;margin-bottom:2px;"></i>统计</a>
+  <a href="/dataset" style="flex:1;text-align:center;padding:6px 0;color:var(--text-dim);text-decoration:none;font-size:10px;"><i class="fas fa-database" style="display:block;font-size:18px;margin-bottom:2px;"></i>数据</a>
+  <a href="/significance" style="flex:1;text-align:center;padding:6px 0;color:var(--text-dim);text-decoration:none;font-size:10px;"><i class="fas fa-flask" style="display:block;font-size:18px;margin-bottom:2px;"></i>显著</a>
+  <a href="/api/export/report" style="flex:1;text-align:center;padding:6px 0;color:var(--text-dim);text-decoration:none;font-size:10px;"><i class="fas fa-download" style="display:block;font-size:18px;margin-bottom:2px;"></i>导出</a>
+</div>
+<style>
+@media (max-width: 768px) {
+  .mobile-bottom-nav { display: flex !important; }
+  .content-wrapper { padding-bottom: 56px; }
+}
+</style>
+</body>
+</html>

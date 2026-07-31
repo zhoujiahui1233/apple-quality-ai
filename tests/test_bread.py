@@ -36,3 +36,4 @@ def test_bread_burn_detected():
     res = a.detect_surface(img, mask, None)
     assert res.defect_count >= 1
     assert any(d.kind == "burn" for d in res.defects)
+    assert a.classify_grade(res).grade == "reject"
