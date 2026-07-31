@@ -1,0 +1,414 @@
+import json
+import os
+import sys
+import uuid
+import logging
+from datetime import datetime
+from pathlib import Path
+
+from flask import Flask, render_template, request, jsonify, send_from_directory, url_for
+from flask_sqlalchemy import SQLAlchemy
+
+import config
+from apple_defect_detector import (
+    preprocess, segment_apple, detect_defects, classify_quality,
+    predict_with_svm, predict_with_rf, predict_with_dl, predict_with_yolo,
+    visualize_result, save_result, visualize_svm, visualize_rf, visualize_dl,
+    visualize_yolo, predict_with_yolo_detect, visualize_yolo_detect,
+    load_scaler, load_svm_model, load_rf_model, load_dl_model,
+    load_yolo_model, load_yolo_detect_model
+)
+import cv2
+import numpy as np
+
+from models import db, DetectionRecord
+
+logger = logging.getLogger("app")
+
+sys.path.insert(0, str(config.ROOT_DIR))
+os.environ['YOLO_CONFIG_DIR'] = str(config.ROOT_DIR / '.ultralytics')
+
+app = Flask(__name__)
+
+# ==================== ???? ====================
+def warmup_models():
+    """??????????????"""
+    logger.info("??????...")
+    try:
+        load_scaler()
+        logger.info("  [OK] Scaler ✓")
+    except Exception as e:
+        logger.warning(f"  [SKIP] Scaler: {e}")
+
+    for name, loader in [
+        ("SVM", load_svm_model),
+        ("RF", load_rf_model),
+        ("DL", load_dl_model),
+        ("YOLO-CLS", load_yolo_model),
+        ("YOLO-DET", load_yolo_detect_model),
+    ]:
+        try:
+            loader()
+            logger.info(f"  [OK] {name} \u2713")
+        except Exception as e:
+            logger.warning(f"  [SKIP] {name}: {e}")
+
+    logger.info("??????")
+
+app.json.ensure_ascii = False
+app.config['SQLALCHEMY_DATABASE_URI'] = config.DATABASE_URI
+app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
+app.config['UPLOAD_FOLDER'] = str(config.UPLOAD_DIR)
+app.config['MAX_CONTENT_LENGTH'] = 16 * 1024 * 1024  # 16MB
+
+db.init_app(app)
+
+from services.detection_service import DetectionService
+detection_service = DetectionService()
+
+ALLOWED_EXTENSIONS = {'.jpg', '.jpeg', '.png', '.bmp'}
+
+
+def allowed_file(filename):
+    return Path(filename).suffix.lower() in ALLOWED_EXTENSIONS
+
+
+@app.route('/')
+def index():
+    return render_template('index.html', active_tab='monitor')
+
+
+@app.route('/upload', methods=['POST'])
+def upload():
+    if 'file' not in request.files:
+        return jsonify({'error': '未找到图片文件'}), 400
+
+    file = request.files['file']
+    if file.filename == '':
+        return jsonify({'error': '文件名为空'}), 400
+
+    if not allowed_file(file.filename):
+        return jsonify({'error': '不支持的文件格式，请上传 JPG/PNG/BMP 图片'}), 400
+
+    category = request.form.get('category', 'apple')
+    tuning = {
+        'sensitivity': request.form.get('sensitivity', 5),
+        'min_area': request.form.get('min_area', 200),
+        'premium_th': request.form.get('premium_th', 0.05),
+        'standard_th': request.form.get('standard_th', 0.15),
+    }
+
+    try:
+        result = detection_service.process_upload(file, category, tuning)
+        if 'error' in result:
+            return jsonify(result), 400
+        return jsonify(result)
+    except Exception as e:
+        logger.error(f"检测失败: {e}")
+        return jsonify({'error': f'检测失败: {str(e)}'}), 500
+
+
+@app.route('/history')
+def history():
+    page = request.args.get('page', 1, type=int)
+    per_page = 12
+    grade_filter = request.args.get('grade', '')
+
+    query = DetectionRecord.query.order_by(DetectionRecord.created_at.desc())
+    if grade_filter:
+        query = query.filter(DetectionRecord.grade.contains(grade_filter))
+
+    pagination = query.paginate(page=page, per_page=per_page, error_out=False)
+    records = pagination.items
+
+    return render_template('history.html', active_tab='history', records=records, pagination=pagination, grade_filter=grade_filter)
+    page = request.args.get('page', 1, type=int)
+    per_page = 12
+    grade_filter = request.args.get('grade', '')
+
+    query = DetectionRecord.query.order_by(DetectionRecord.created_at.desc())
+    if grade_filter:
+        query = query.filter(DetectionRecord.grade.contains(grade_filter))
+
+    pagination = query.paginate(page=page, per_page=per_page, error_out=False)
+    records = pagination.items
+
+    return render_template('history.html',
+                           records=records,
+                           pagination=pagination,
+                           grade_filter=grade_filter)
+
+
+@app.route('/detail/<int:record_id>')
+def detail(record_id):
+    record = DetectionRecord.query.get_or_404(record_id)
+    return render_template('detail.html', record=record)
+
+
+@app.route('/delete/<int:record_id>', methods=['POST'])
+def delete(record_id):
+    record = DetectionRecord.query.get_or_404(record_id)
+    try:
+        # ????
+        for fname in [record.filename, record.result_filename]:
+            if fname:
+                fpath = os.path.join(app.config['UPLOAD_FOLDER'], fname)
+                if os.path.exists(fpath):
+                    os.remove(fpath)
+        db.session.delete(record)
+        db.session.commit()
+        return jsonify({'success': True})
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+
+@app.route('/stats')
+def stats_page():
+    return render_template('stats.html', active_tab='stats')
+
+def stats():
+    total = DetectionRecord.query.count()
+    premium = DetectionRecord.query.filter(DetectionRecord.grade.contains('Premium')).count()
+    standard = DetectionRecord.query.filter(DetectionRecord.grade.contains('Standard')).count()
+    reject = DetectionRecord.query.filter(DetectionRecord.grade.contains('Reject')).count()
+    return jsonify({
+        'total': total,
+        'premium': premium,
+        'standard': standard,
+        'reject': reject,
+    })
+
+
+
+@app.route('/api/stats/daily')
+def stats_daily():
+    from datetime import datetime, timedelta
+    from models import DetectionRecord
+    import collections
+    days = request.args.get('days', 7, type=int)
+    today = datetime.utcnow().date()
+    daily = collections.OrderedDict()
+    for i in range(days - 1, -1, -1):
+        d = today - timedelta(days=i)
+        key = d.isoformat()
+        daily[key] = {'total': 0, 'premium': 0, 'standard': 0, 'reject': 0}
+    records = DetectionRecord.query.filter(DetectionRecord.created_at >= (today - timedelta(days=days-1))).all()
+    for r in records:
+        key = r.created_at.date().isoformat()
+        if key in daily:
+            daily[key]['total'] += 1
+            if 'Premium' in (r.grade or ''):
+                daily[key]['premium'] += 1
+            elif 'Reject' in (r.grade or ''):
+                daily[key]['reject'] += 1
+            else:
+                daily[key]['standard'] += 1
+    return jsonify(list(daily.values()))
+
+@app.route('/annotations')
+def browse_annotations():
+    import glob, shutil
+    preview_src = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'yolo_detect_dataset', 'preview_annotations')
+    preview_dst = os.path.join(app.config['UPLOAD_FOLDER'], '_annotations')
+    
+    # Copy preview images to static folder on first access
+    if os.path.exists(preview_src) and not os.path.exists(preview_dst):
+        os.makedirs(preview_dst, exist_ok=True)
+        for fname in os.listdir(preview_src):
+            shutil.copy2(os.path.join(preview_src, fname), os.path.join(preview_dst, fname))
+    
+    images = []
+    if os.path.exists(preview_dst):
+        exts = ('*.jpg', '*.jpeg', '*.png', '*.bmp')
+        for ext in exts:
+            images.extend(glob.glob(os.path.join(preview_dst, ext)))
+        images = sorted([os.path.basename(p) for p in images])
+    
+    return render_template('annotations.html', images=images, count=len(images))
+
+
+
+@app.route('/api/export/report')
+def export_report():
+    import openpyxl
+    from openpyxl.styles import Font, PatternFill, Alignment, Border, Side
+    from io import BytesIO
+    from flask import send_file
+
+    records = DetectionRecord.query.order_by(DetectionRecord.created_at.desc()).all()
+
+    wb = openpyxl.Workbook()
+    ws = wb.active
+    ws.title = "检测报告"
+
+    # Header styling
+    header_font = Font(name="Microsoft YaHei", bold=True, color="FFFFFF", size=11)
+    header_fill = PatternFill(start_color="1a237e", end_color="1a237e", fill_type="solid")
+    header_align = Alignment(horizontal="center", vertical="center", wrap_text=True)
+    thin_border = Border(
+        left=Side(style="thin"),
+        right=Side(style="thin"),
+        top=Side(style="thin"),
+        bottom=Side(style="thin")
+    )
+
+    headers = ["ID", "文件名", "等级", "缺陷占比", "缺陷数量",
+               "苹果面积(px)", "缺陷面积(px)", "检测时间"]
+    for col, h in enumerate(headers, 1):
+        cell = ws.cell(row=1, column=col, value=h)
+        cell.font = header_font
+        cell.fill = header_fill
+        cell.alignment = header_align
+        cell.border = thin_border
+
+    # Data rows
+    data_font = Font(name="Microsoft YaHei", size=10)
+    data_align = Alignment(horizontal="center", vertical="center")
+    grade_colors = {
+        "Premium": PatternFill(start_color="00ff88", end_color="00ff88", fill_type="solid"),
+        "Standard": PatternFill(start_color="ffc107", end_color="ffc107", fill_type="solid"),
+        "Reject": PatternFill(start_color="ff4757", end_color="ff4757", fill_type="solid"),
+    }
+
+    for i, r in enumerate(records, 2):
+        values = [
+            r.id, r.filename, r.grade,
+            f"{r.defect_ratio * 100:.2f}%",
+            r.defect_count, r.apple_area, r.defect_area,
+            r.created_at.strftime("%Y-%m-%d %H:%M:%S") if r.created_at else ""
+        ]
+        for col, v in enumerate(values, 1):
+            cell = ws.cell(row=i, column=col, value=v)
+            cell.font = data_font
+            cell.alignment = data_align
+            cell.border = thin_border
+            # Color grade column
+            if col == 3:
+                for keyword, fill in grade_colors.items():
+                    if keyword in str(r.grade):
+                        cell.fill = fill
+                        break
+
+    # Column widths
+    widths = [8, 30, 15, 12, 10, 14, 14, 20]
+    for i, w in enumerate(widths, 1):
+        ws.column_dimensions[chr(64 + i)].width = w
+
+    # Summary sheet
+    ws2 = wb.create_sheet(title="统计摘要")
+    total = len(records)
+    premium = sum(1 for r in records if "Premium" in str(r.grade))
+    standard = sum(1 for r in records if "Standard" in str(r.grade))
+    reject = sum(1 for r in records if "Reject" in str(r.grade))
+
+    summary = [
+        ["指标", "数值"],
+        ["累计检测", total],
+        ["优质", premium],
+        ["标准", standard],
+        ["不合格", reject],
+        ["优质率", f"{premium / total * 100:.1f}%" if total else "0%"],
+        ["不合格率", f"{reject / total * 100:.1f}%" if total else "0%"],
+    ]
+
+    for row_data in summary:
+        ws2.append(row_data)
+
+    for col in range(1, 3):
+        cell = ws2.cell(row=1, column=col)
+        cell.font = header_font
+        cell.fill = header_fill
+        cell.alignment = header_align
+        cell.border = thin_border
+
+    ws2.column_dimensions["A"].width = 15
+    ws2.column_dimensions["B"].width = 15
+
+    output = BytesIO()
+    wb.save(output)
+    output.seek(0)
+
+    filename = f"苹果品控报告_{datetime.now().strftime('%Y%m%d_%H%M%S')}.xlsx"
+    return send_file(
+        output,
+        mimetype="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        as_attachment=True,
+        download_name=filename
+    )
+
+
+
+
+@app.route('/manifest.json')
+def manifest_json():
+    return send_from_directory(str(config.STATIC_DIR), 'manifest.json')
+
+
+@app.route('/api/collect', methods=['POST'])
+def collect_image():
+    if "file" not in request.files:
+        return jsonify({"error": "?????"}), 400
+    file = request.files["file"]
+    category = request.form.get("category", "unlabeled")
+    if file.filename == "":
+        return jsonify({"error": "?????"}), 400
+    from datetime import datetime
+    dataset_dir = os.path.join(os.path.dirname(os.path.abspath(__file__)), "dataset_collected", category)
+    os.makedirs(dataset_dir, exist_ok=True)
+    ts = datetime.now().strftime("%Y%m%d_%H%M%S_%f")[:-3]
+    ext = os.path.splitext(file.filename)[1].lower() or ".jpg"
+    fname = category + "_" + ts + ext
+    path = os.path.join(dataset_dir, fname)
+    file.save(path)
+    logger.info("?????: [%s] %s", category, fname)
+    return jsonify({"success": True, "category": category, "filename": fname})
+
+
+@app.route("/api/dataset/list")
+def list_dataset():
+    dataset_dir = os.path.join(os.path.dirname(os.path.abspath(__file__)), "dataset_collected")
+    if not os.path.exists(dataset_dir):
+        return jsonify({"categories": {}, "total": 0})
+    result = {}
+    total = 0
+    for cat in sorted(os.listdir(dataset_dir)):
+        cat_dir = os.path.join(dataset_dir, cat)
+        if not os.path.isdir(cat_dir):
+            continue
+        images = sorted(os.listdir(cat_dir))
+        result[cat] = [f for f in images]
+        total += len(images)
+    return jsonify({"categories": result, "total": total})
+
+
+@app.route('/dataset_collected/<path:filename>')
+def dataset_file(filename):
+    dataset_dir = os.path.join(os.path.dirname(os.path.abspath(__file__)), "dataset_collected")
+    return send_from_directory(dataset_dir, filename)
+
+
+@app.route('/dataset')
+def dataset_page():
+    return render_template("dataset.html", active_tab="dataset")
+
+if __name__ == '__main__':
+    logging.basicConfig(
+        level=getattr(logging, config.LOG_LEVEL),
+        format=config.LOG_FORMAT,
+        datefmt=config.LOG_DATE_FORMAT
+    )
+    with app.app_context():
+        db.create_all()
+    warmup_models()
+    # 显示本机网络地址，方便手机访问
+    import socket
+    try:
+        s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+        s.connect(("8.8.8.8", 80))
+        local_ip = s.getsockname()[0]
+        s.close()
+        logger.info(f"✔ 手机访问地址: http://{local_ip}:{config.PORT}/")
+        logger.info(f"✔ 本机访问地址: http://127.0.0.1:{config.PORT}/")
+    except:
+        logger.info(f"✔ 访问地址: http://[your-ip]:{config.PORT}/")
+    app.run(debug=config.DEBUG, host=config.HOST, port=config.PORT)
