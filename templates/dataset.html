@@ -12,6 +12,7 @@
 .img-grid img { width: 100%; aspect-ratio: 1; object-fit: cover; border-radius: 8px; border: 1px solid var(--border); cursor: pointer; transition: 0.3s; }
 .img-grid img:hover { border-color: var(--danger); transform: scale(1.05); }
 .img-del { position: absolute; top: 4px; right: 4px; width: 20px; height: 20px; border-radius: 50%; border: none; background: rgba(255,71,87,0.8); color: #fff; font-size: 10px; cursor: pointer; opacity: 0; transition: 0.3s; }
+.img-move { position:absolute; bottom:4px; right:4px; font-size:10px; padding:2px 4px; border-radius:4px; border:1px solid var(--border); background:rgba(0,0,0,0.75); color:var(--text); cursor:pointer; max-width:64px; }
 .img-item:hover .img-del { opacity: 1; }
 .stat-row { display: flex; gap: 12px; flex-wrap: wrap; margin-bottom: 20px; }
 .stat-box { flex: 1; min-width: 100px; padding: 14px; border-radius: 10px; background: var(--bg-card); border: 1px solid var(--border); text-align: center; }
@@ -87,7 +88,7 @@ function loadDataset() {
           if (imgs.length === 0) continue;
           html += '<div class="label-group"><div class="label-title">' + lb + ' (' + imgs.length + ')</div><div class="img-grid">';
           for (var m = 0; m < imgs.length; m++) {
-            html += '<div class="img-item"><img src="/dataset_collected/' + k + '/' + lb + '/' + imgs[m] + '" loading="lazy"><button class="img-del" onclick="delImg(\'' + k + '\',\'' + lb + '\',\'' + imgs[m] + '\')">✕</button></div>';
+            html += '<div class="img-item"><img src="/dataset_collected/' + k + '/' + lb + '/' + imgs[m] + '" loading="lazy">'+ '<button class="img-del" onclick="delImg(\'' + k + '\',\'' + lb + '\',\'' + imgs[m] + '\')">✕</button>'+ '<select class="img-move" onchange="moveImg(this, \'' + k + '\', \'' + lb + '\', \'' + imgs[m] + '\')">'+ '<option value="">改标签</option><option value="合格">→合格</option><option value="不合格">→不合格</option></select>+ '</div>';
           }
           html += '</div></div>';
         }
@@ -95,6 +96,22 @@ function loadDataset() {
       }
       if (html === "") html = '<div style="text-align:center;padding:40px;color:var(--text-dim);font-size:13px;">还没有收集数据，去检测页面保存图片到数据集吧</div>';
       document.getElementById("categoryContainer").innerHTML = html;
+    });
+}
+
+function moveImg(sel, cat, fromLabel, fname) {
+  var to = sel.value;
+  if (!to) return;
+  if (!confirm('确认把该图片从「' + fromLabel + '」移动到「' + to + '」？')) { sel.value = ''; return; }
+  var fd = new FormData();
+  fd.append('category', cat);
+  fd.append('filename', fname);
+  fd.append('from_label', fromLabel);
+  fd.append('to_label', to);
+  fetch('/api/dataset/move', { method: 'POST', body: fd })
+    .then(function(r) { return r.json(); })
+    .then(function(d) {
+      if (d.success) { loadDataset(); } else { alert(d.error || '移动失败'); sel.value = ''; }
     });
 }
 

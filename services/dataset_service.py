@@ -1,5 +1,7 @@
 import os
+import shutil
 from datetime import datetime
+from pathlib import Path
 import config
 
 
@@ -40,3 +42,16 @@ class DatasetService:
             target.unlink()
             return True
         return False
+
+    def move(self, category: str, filename: str, from_label: str, to_label: str):
+        """修正标签：把图片从一个标签移动到另一个，重命名为新标签以避免旧标签/缺陷类型污染分类。"""
+        src = self.BASE / category / from_label / filename
+        if not src.is_file():
+            return False, "文件不存在"
+        dst_dir = self.BASE / category / to_label
+        dst_dir.mkdir(parents=True, exist_ok=True)
+        ts = datetime.now().strftime("%Y%m%d_%H%M%S_%f")[:-3]
+        suffix = Path(filename).suffix.lower() or ".jpg"
+        new_name = f"{to_label}_{ts}{suffix}"
+        shutil.move(str(src), str(dst_dir / new_name))
+        return True, new_name

@@ -686,6 +686,22 @@ def delete_dataset_item():
     return jsonify({'success': ok})
 
 
+
+@app.route('/api/dataset/move', methods=['POST'])
+def move_dataset_image():
+    """修正标签：移动图片到另一个标签（合格/不合格）"""
+    category = request.form.get('category', '')
+    filename = request.form.get('filename', '')
+    from_label = request.form.get('from_label', '')
+    to_label = request.form.get('to_label', '')
+    if not (category and filename and from_label and to_label):
+        return jsonify({'error': '参数不完整'}), 400
+    ok, info = dataset_service.move(category, filename, from_label, to_label)
+    if not ok:
+        return jsonify({'error': info}), 404
+    logger.info("数据集修正: [%s/%s] %s -> %s (%s)", category, from_label, filename, to_label, info)
+    return jsonify({'success': True, 'filename': info})
+
 @app.route('/api/models/history')
 def models_history():
     return jsonify(model_registry.history())

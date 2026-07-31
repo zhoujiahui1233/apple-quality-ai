@@ -283,7 +283,9 @@ function up(f) {
     img.src = d.result_image + '?t=' + Date.now();
     img.classList.remove('d-none');
     document.getElementById('uploadZone').classList.add('d-none');
-    document.getElementById('streamStatus').innerHTML = '<i class="fas fa-check-circle" style="color:var(--accent);"></i> \u68c0\u6d4b\u5b8c\u6210';
+    document.getElementById('streamStatus').innerHTML = '<i class="fas fa-check-circle" style="color:var(--accent);"></i> \u68c0\u6d4b\u5b8c\u6210'
+    var _sb = document.getElementById('saveToDatasetBar');
+    if (_sb) _sb.classList.remove('d-none');;
     // Badge
     var g = d.grade || '';
     var badge = document.getElementById('streamBadge');
