@@ -1,5 +1,5 @@
 {% extends "base.html" %}
-{% block title %}检测历史{% endblock %}
+{% block title %}{% if module == 'slice' %}切片·{% endif %}检测历史{% endblock %}
 {% block content %}
 <style>
 .batch-bar { display:flex; align-items:center; gap:10px; flex-wrap:wrap; padding:10px 14px; background:rgba(0,212,255,0.05); border:1px solid var(--border); border-radius:10px; margin-bottom:12px; font-size:13px; }
@@ -7,21 +7,27 @@
 .batch-bar button { border-radius:8px; font-size:12px; padding:5px 12px; }
 .sel-count { color:var(--primary); font-weight:600; }
 .pg-sel { background:rgba(10,16,30,0.9); color:var(--text); border:1px solid var(--border); border-radius:8px; padding:5px 10px; font-size:12px; }
+.opt-slice { color:var(--primary); font-weight:700; }
 </style>
 
 <div class="d-flex justify-content-between align-items-center mb-3">
   <div style="display:flex;align-items:center;gap:12px;">
-    <h4 style="color:var(--text);margin:0;">📄 检测历史</h4>
+    <h4 style="color:var(--text);margin:0;">📄 {% if module == 'slice' %}切片·{% endif %}检测历史</h4>
     <select id="pageCat" class="pg-sel" onchange="pageCatChange(this.value)">
+      {% if module == 'slice' %}
+      <option value="apple_slice" class="opt-slice" selected>🍎 苹果切片</option>
+      {% else %}
       <option value="">全部品类</option>
       <option value="apple" {% if category == "apple" %}selected{% endif %}>🍎 苹果</option>
       <option value="bread" {% if category == "bread" %}selected{% endif %}>🍞 面包</option>
       <option value="beverage" {% if category == "beverage" %}selected{% endif %}>🥤 饮料</option>
+      {% endif %}
     </select>
+    <a href="/history?review=1{% if module == 'slice' %}&module=slice{% endif %}" class="btn-w btn-sm2"><i class="fas fa-user-check"></i> 只看待复核</a>
   </div>
   <div>
     <a href="/" class="btn btn-success btn-sm">☁ 新检测</a>
-    <a href="/api/export/report" class="btn btn-sm" style="border:1px solid var(--primary);color:var(--primary);background:rgba(0,212,255,0.08);"><i class="fas fa-download"></i> 导出报告</a>
+    <a href="/api/export/report" class="btn-p btn-sm2"><i class="fas fa-download"></i> 导出报告</a>
   </div>
 </div>
 
@@ -38,16 +44,21 @@
     <option value="standard">合格</option>
     <option value="reject">不合格</option>
   </select>
-  <button class="btn btn-sm" style="border:1px solid var(--accent);color:var(--accent);background:rgba(0,255,136,0.06);" onclick="batchUpdate('grade')">批量改等级</button>
+  <button class="btn-a btn-sm2" onclick="batchUpdate('grade')">批量改等级</button>
   <select id="batchCategory">
+    {% if module == 'slice' %}
+    <option value="apple_slice" selected>苹果切片</option>
+    {% else %}
     <option value="">改品类为…</option>
     <option value="apple">苹果</option>
     <option value="bread">面包</option>
     <option value="beverage">饮料</option>
+    {% endif %}
   </select>
-  <button class="btn btn-sm" style="border:1px solid var(--warning);color:var(--warning);background:rgba(255,193,7,0.06);" onclick="batchUpdate('category')">批量改品类</button>
-  <button class="btn btn-sm btn-danger" onclick="batchDelete()"><i class="fas fa-trash"></i> 批量删除</button>
-  <button class="btn btn-sm" style="border:1px solid var(--danger);color:#ff6b81;background:rgba(255,71,87,0.06);" onclick="deleteAll()"><i class="fas fa-trash-alt"></i> 全部删除</button>
+  <button class="btn-w btn-sm2" onclick="batchUpdate('category')">批量改品类</button>
+  <button class="btn-p btn-sm2" onclick="batchMarkReviewed()"><i class="fas fa-check-double"></i> 标记已复核</button>
+  <button class="btn-d btn-sm2" onclick="batchDelete()"><i class="fas fa-trash"></i> 批量删除</button>
+  <button class="btn-d btn-sm2" onclick="deleteAll()"><i class="fas fa-trash-alt"></i> 全部删除</button>
 </div>
 {% endif %}
 
@@ -62,8 +73,10 @@
           <th>ID</th>
           <th>品类</th>
           <th>等级</th>
+          <th>严重度</th>
           <th>缺陷占比</th>
           <th>缺陷数</th>
+          <th>待复核</th>
           <th>时间</th>
           <th>操作</th>
         </tr>
@@ -73,10 +86,12 @@
         <tr style="border-top:1px solid rgba(0,212,255,0.08);">
           <td style="padding:8px;"><input type="checkbox" class="row-check" value="{{ r.id }}" onchange="updateSelCount()"></td>
           <td>{{ r.id }}</td>
-          <td>{{ {"apple":"🍎 苹果","bread":"🍞 面包","beverage":"🥤 饮料"}.get(r.category, "—") }}</td>
+          <td>{{ {"apple_slice":"🍎 苹果切片","apple":"🍎 苹果","bread":"🍞 面包","beverage":"🥤 饮料"}.get(r.category, "—") }}</td>
           <td><strong>{{ r.grade }}</strong></td>
+          <td>{% set sev = r.severity or '轻度' %}{% if sev == '重度' %}<span style="color:#ff6b81;font-weight:600;">重度</span>{% elif sev == '中度' %}<span style="color:#ffc107;">中度</span>{% else %}<span style="color:var(--accent);">轻度</span>{% endif %}</td>
           <td>{{ "%.2f"|format(r.defect_ratio*100) }}%</td>
           <td>{{ r.defect_count }}</td>
+          <td>{% if r.needs_review %}<span style="color:var(--warning);" title="原因：{{ r.review_reason }}"><i class="fas fa-user-check"></i> 待复核</span>{% else %}<span style="color:var(--text-dim);">—</span>{% endif %}</td>
           <td>{{ r.created_at.strftime("%m-%d %H:%M") }}</td>
           <td>
             <a href="/detail/{{ r.id }}" class="btn btn-outline-success btn-sm">查看</a>
@@ -94,20 +109,28 @@
 {% if pagination.pages > 1 %}
 <div class="text-center mt-3">
   {% for p in range(1, pagination.pages + 1) %}
-    <a href="/history?page={{ p }}{% if category %}&category={{ category }}{% endif %}" class="btn btn-sm {% if p == pagination.page %}btn-success{% else %}btn-outline-success{% endif %}">{{ p }}</a>
+    <a href="/history?page={{ p }}{% if module == 'slice' %}&module=slice{% endif %}{% if category %}&category={{ category }}{% endif %}{% if review_filter == '1' %}&review=1{% endif %}" class="btn btn-sm {% if p == pagination.page %}btn-success{% else %}btn-outline-success{% endif %}">{{ p }}</a>
   {% endfor %}
 </div>
 {% endif %}
 <script>
+var DEFCAT = "{{ default_category|default('') }}";
 function pageCatChange(val) {
-  localStorage.setItem('category', val || 'apple');
-  window.location.href = '/history?category=' + val;
+  var params = new URLSearchParams(location.search);
+  var cat = DEFCAT || val || 'apple';
+  localStorage.setItem('category', cat);
+  var q = 'category=' + encodeURIComponent(cat);
+  if (DEFCAT) q += '&module=slice';
+  else if (params.has('module')) q += '&module=' + params.get('module');
+  window.location.href = '/history?' + q;
 }
 (function() {
   var params = new URLSearchParams(location.search);
   if (!params.has('category')) {
-    var saved = localStorage.getItem('category') || 'apple';
-    location.replace('/history?category=' + saved);
+    var saved = DEFCAT || localStorage.getItem('category') || 'apple';
+    var q = 'category=' + encodeURIComponent(saved);
+    if (params.has('module')) q += '&module=' + params.get('module');
+    location.replace('/history?' + q);
   }
 })();
 function del(id){if(!confirm("确认删除这条记录？"))return;fetch("/delete/"+id,{method:"POST"}).then(function(r){return r.json();}).then(function(d){if(d.success)window.location.reload();else alert(d.error);}).catch(function(e){alert("删除失败");});}
@@ -125,7 +148,7 @@ function getIds(){
 }
 function deleteAll(){
   var cat = document.getElementById('pageCat').value || '';
-  var catName = cat === 'apple' ? '苹果' : (cat === 'bread' ? '面包' : (cat === 'beverage' ? '饮料' : '全部品类'));
+  var catName = cat === 'apple_slice' ? '苹果切片' : (cat === 'apple' ? '苹果' : (cat === 'bread' ? '面包' : (cat === 'beverage' ? '饮料' : '全部品类')));
   if(!confirm('确认删除「' + catName + '」的所有检测记录？此操作不可恢复！')) return;
   var body = {delete_all: true};
   if (cat) body.filter = {category: cat};
@@ -159,6 +182,16 @@ function batchUpdate(field){
       if(d.success){ alert('已修改 ' + d.updated + ' 条记录'); window.location.reload(); }
       else alert(d.error || '修改失败');
     }).catch(function(e){ alert('修改失败: ' + e); });
+}
+function batchMarkReviewed(){
+  var ids = getIds();
+  if(!ids.length){ alert('请先勾选要标记的记录'); return; }
+  if(!confirm('确认将选中的 ' + ids.length + ' 条记录标记为已复核？')) return;
+  fetch('/api/records/mark_reviewed',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({ids:ids})})
+    .then(function(r){return r.json();}).then(function(d){
+      if(d.success){ alert('已清除 ' + d.cleared + ' 条待复核标记'); window.location.reload(); }
+      else alert(d.error || '操作失败');
+    }).catch(function(e){ alert('操作失败: ' + e); });
 }
 </script>
 {% endblock %}

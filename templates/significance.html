@@ -1,5 +1,5 @@
 {% extends "base.html" %}
-{% block title %}显著性分析{% endblock %}
+{% block title %}{% if module == 'slice' %}切片·{% endif %}显著性分析{% endblock %}
 {% block content %}
 <style>
 .stat-card { padding: 18px; border-radius: 12px; background: var(--bg-card); border: 1px solid var(--border); }
@@ -11,18 +11,36 @@
 .mcnemar-table th { background: rgba(0,212,255,0.08); color: var(--primary); }
 .sig { color: var(--accent); font-weight: 700; }
 .non-sig { color: var(--text-dim); }
+.sel { padding: 6px 10px; border-radius: 8px; border: 1px solid var(--border); background: rgba(0,0,0,0.5); color: var(--text); font-size: 12px; outline: none; }
+.sel:focus { border-color: var(--primary); }
+.exp-btn { padding: 6px 12px; border-radius: 8px; border: 1px solid var(--primary); background: var(--primary-dim); color: var(--primary); font-size: 12px; cursor: pointer; transition: all .3s; }
+.exp-btn:hover { box-shadow: 0 0 12px rgba(0,212,255,0.35); }
+.metric-table { width: 100%; font-size: 12px; border-collapse: collapse; }
+.metric-table th, .metric-table td { padding: 8px 10px; text-align: center; border: 1px solid var(--border); }
+.metric-table th { background: rgba(0,212,255,0.08); color: var(--primary); }
+.metric-table td.num { font-family: "Inter", monospace; color: var(--text); }
+.metric-table tr:hover td { background: rgba(0,212,255,0.04); }
+.heat-wrap { display: flex; gap: 18px; flex-wrap: wrap; align-items: center; }
+.heat-canvas { width: 320px; height: 320px; background: rgba(0,0,0,0.4); border: 1px solid var(--border); border-radius: 10px; }
+.hint-box { font-size: 12px; color: var(--text-dim); line-height: 1.8; }
+.empty-tip { font-size: 12px; color: var(--warning); padding: 10px 0; }
 </style>
 
-<div class="d-flex justify-content-between align-items-center mb-3">
-  <h4 style="color:var(--text);font-weight:600;"><i class="fas fa-chart-bar"></i> 显著性分析</h4>
-  <span style="color:var(--text-dim);font-size:12px;" id="note"></span>
+<div class="d-flex justify-content-between align-items-center mb-3" style="flex-wrap:wrap;gap:8px;">
+  <h4 style="color:var(--text);font-weight:600;"><i class="fas fa-chart-bar"></i> {% if module == 'slice' %}切片·{% endif %}显著性分析</h4>
+  <div style="display:flex;gap:8px;align-items:center;">
+    <span style="color:var(--text-dim);font-size:12px;" id="note"></span>
+    <button class="exp-btn" onclick="exportCSV()" title="导出全部指标为 CSV"><i class="fas fa-file-csv"></i> 导出CSV</button>
+  </div>
 </div>
 
+{% if module == 'slice' %}<div style="font-size:12px;color:var(--text-dim);margin-bottom:10px;">切片模块：数据来自 multimodal_data/ 下的鲜切苹果切片样本实验数据</div>{% endif %}
+
 <div class="row g-3 mb-3">
-  <div class="col-3"><div class="stat-card text-center"><div class="n" style="color:var(--primary);">4</div><div class="l">检测模型</div></div></div>
-  <div class="col-3"><div class="stat-card text-center"><div class="n" style="color:var(--accent);">3</div><div class="l">食品品类</div></div></div>
-  <div class="col-3"><div class="stat-card text-center"><div class="n" style="color:var(--warning);">2</div><div class="l">统计检验</div></div></div>
-  <div class="col-3"><div class="stat-card text-center"><div class="n" style="color:var(--danger);">3级</div><div class="l">品质分级</div></div></div>
+  <div class="col-6 col-lg-3"><div class="stat-card text-center"><div class="n" style="color:var(--primary);" id="nModels">4</div><div class="l">检测模型</div></div></div>
+  <div class="col-6 col-lg-3"><div class="stat-card text-center"><div class="n" style="color:var(--accent);" id="nCats">3</div><div class="l">食品品类</div></div></div>
+  <div class="col-6 col-lg-3"><div class="stat-card text-center"><div class="n" style="color:var(--warning);" id="nStats">2</div><div class="l">统计检验</div></div></div>
+  <div class="col-6 col-lg-3"><div class="stat-card text-center"><div class="n" style="color:var(--danger);">3级</div><div class="l">品质分级</div></div></div>
 </div>
 
 <div class="row g-3">
@@ -41,11 +59,46 @@
 </div>
 
 <div class="glass-card p-3 mt-3">
+  <div style="font-size:13px;color:var(--primary);margin-bottom:12px;"><i class="fas fa-table-cells"></i> 混淆矩阵热力图
+    <span style="font-size:11px;color:var(--text-dim);margin-left:8px;">行=真实标签，列=模型预测</span>
+  </div>
+  <div class="heat-wrap">
+    <div>
+      <select id="cmCat" class="sel" onchange="onCmChange()"></select>
+      <select id="cmModel" class="sel" style="margin-left:8px;" onchange="renderCM()"></select>
+      <div style="margin-top:10px;"><button class="exp-btn" onclick="exportHeatmap()"><i class="fas fa-image"></i> 导出PNG</button></div>
+    </div>
+    <canvas id="cmCanvas" class="heat-canvas"></canvas>
+  </div>
+  <div class="empty-tip" id="cmTip" style="display:none;">当前模型暂无混淆矩阵数据。</div>
+</div>
+
+<div class="row g-3 mt-1">
+  <div class="col-lg-7">
+    <div class="glass-card p-3">
+      <div style="font-size:13px;color:var(--primary);margin-bottom:12px;"><i class="fas fa-wave-square"></i> ROC 曲线（
+        <select id="rocCat" class="sel" onchange="renderROC()"></select>）
+        <button class="exp-btn" style="float:right;" onclick="exportChart('rocChart','ROC曲线')"><i class="fas fa-image"></i> 导出PNG</button>
+      </div>
+      <div class="chart-wrap"><canvas id="rocChart"></canvas></div>
+    </div>
+  </div>
+  <div class="col-lg-5">
+    <div class="glass-card p-3">
+      <div style="font-size:13px;color:var(--primary);margin-bottom:12px;"><i class="fas fa-table"></i> 模型详细指标
+        <span style="font-size:11px;color:var(--text-dim);margin-left:8px;">P/R/F1 以「不合格」为正类</span>
+      </div>
+      <div style="overflow-x:auto;"><table class="metric-table" id="metricTable"></table></div>
+    </div>
+  </div>
+</div>
+
+<div class="glass-card p-3 mt-3">
   <div style="font-size:13px;color:var(--text-dim);margin-bottom:12px;"><i class="fas fa-flask"></i> McNemar 检验说明</div>
-  <div style="font-size:12px;color:var(--text-dim);line-height:1.8;">
+  <div class="hint-box">
     <p>• <strong style="color:var(--primary);">McNemar 检验</strong>: 对同一批样本上两个模型的预测错误区别进行显著性检验，p &lt; 0.05 表示两模型性能差异显著。</p>
     <p>• <strong style="color:var(--accent);">Kappa 一致性</strong>: 检验机器分级与人工感官评价的一致性，&gt; 0.8 为优良一致。</p>
-    <p>• 数据来源: 优先读取实验数据 output/experiment_results.json，无则显示示例数据。</p>
+    <p>• 数据来源: 优先读取实验数据 output/experiment_results.json（运行 <code style="color:var(--primary);">python scripts/run_experiment.py</code> 生成真实数据），无则显示示例数据。</p>
   </div>
   <div id="mcnemarWrap" style="display:none;margin-top:12px;">
     <div style="font-size:13px;color:var(--primary);margin-bottom:8px;"><i class="fas fa-table"></i> McNemar 检验 p 值矩阵（p &lt; 0.05 表示两模型差异显著，标 ★）</div>
@@ -54,26 +107,32 @@
 </div>
 
 <script>
-fetch("/api/stats/models").then(function(r) { return r.json(); }).then(function(d) {
+var expData = null;
+var modelChart = null, avgChart = null, rocChart = null;
+var MODEL_LABEL = { svm: "SVM", rf: "RF", dl: "DL", yolo: "YOLO", pipeline: "传统管线", pipeline3: "传统管线(3级)" };
+var CAT_LABEL = { apple: "苹果", bread: "面包", beverage: "饮料", apple_slice: "苹果切片" };
+var LABEL_CN = { good: "合格/优质", bad: "不合格", premium: "优质", standard: "合格", reject: "不合格" };
+var COLORS = ["rgba(0,212,255,0.85)", "rgba(0,255,136,0.85)", "rgba(255,193,7,0.85)", "rgba(255,71,87,0.85)"];
+
+var DEFCAT = "{{ default_category|default('') }}";
+fetch("/api/stats/models" + (DEFCAT ? "?module=slice" : "")).then(function(r) { return r.json(); }).then(function(d) {
+  expData = d;
   document.getElementById("note").textContent = d.note || "";
   var cats = d.categories || [];
   var models = d.models || [];
   var acc = d.accuracy || {};
-
-  var colors = ["rgba(139,69,19,0.8)", "rgba(0,120,0,0.8)", "rgba(0,0,180,0.8)", "rgba(150,0,150,0.8)"];
+  document.getElementById("nModels").textContent = models.length || "4";
+  document.getElementById("nCats").textContent = cats.length || "3";
 
   // Grouped bar chart
-  new Chart(document.getElementById("modelChart"), {
+  modelChart = new Chart(document.getElementById("modelChart"), {
     type: "bar",
     data: {
-      labels: cats.map(function(c) { return {apple:"苹果",bread:"面包",beverage:"饮料"}[c] || c; }),
+      labels: cats.map(function(c) { return CAT_LABEL[c] || c; }),
       datasets: models.map(function(m, i) {
-        return {
-          label: m.toUpperCase(),
-          data: cats.map(function(c) { return acc[c] ? acc[c][m] || 0 : 0; }),
-          backgroundColor: colors[i],
-          borderRadius: 4
-        };
+        return { label: MODEL_LABEL[m] || m.toUpperCase(),
+                 data: cats.map(function(c) { return acc[c] ? acc[c][m] || 0 : 0; }),
+                 backgroundColor: COLORS[i % COLORS.length], borderRadius: 4 };
       })
     },
     options: {
@@ -88,13 +147,13 @@ fetch("/api/stats/models").then(function(r) { return r.json(); }).then(function(
   // Avg accuracy bar
   var avgs = models.map(function(m) {
     var vals = cats.map(function(c) { return acc[c] ? acc[c][m] || 0 : 0; });
-    return vals.reduce(function(a, b) { return a + b; }, 0) / vals.length;
+    return vals.reduce(function(a, b) { return a + b; }, 0) / (vals.length || 1);
   });
-  new Chart(document.getElementById("avgChart"), {
+  avgChart = new Chart(document.getElementById("avgChart"), {
     type: "bar",
     data: {
-      labels: models.map(function(m) { return m.toUpperCase(); }),
-      datasets: [{ label: "平均准确率 %", data: avgs, backgroundColor: colors, borderRadius: 4 }]
+      labels: models.map(function(m) { return MODEL_LABEL[m] || m.toUpperCase(); }),
+      datasets: [{ label: "平均准确率 %", data: avgs, backgroundColor: COLORS, borderRadius: 4 }]
     },
     options: {
       indexAxis: "y", responsive: true, maintainAspectRatio: false,
@@ -107,20 +166,21 @@ fetch("/api/stats/models").then(function(r) { return r.json(); }).then(function(
   // 样本数提示
   if (d.n) {
     var nTxt = Object.keys(d.n).map(function(c) {
-      return ({apple:"苹果",bread:"面包",beverage:"饮料"}[c] || c) + ": " + d.n[c] + " 张";
+      return (CAT_LABEL[c] || c) + ": " + d.n[c] + " 张";
     }).join(" · ");
     document.getElementById("note").textContent += "  [" + nTxt + "]";
   }
+
   // McNemar p 值矩阵
   if (d.mcnemar && d.models) {
     var mkeys = Object.keys(d.mcnemar);
     if (mkeys.length) {
       var cat = mkeys[0];
       var mat = d.mcnemar[cat];
-      var ms = d.models.filter(function(m) { return m !== "pipeline"; });
-      var html = "<tr><th></th>" + ms.map(function(m) { return "<th>" + m.toUpperCase() + "</th>"; }).join("") + "</tr>";
+      var ms = d.models.filter(function(m) { return m !== "pipeline" && m !== "pipeline3"; });
+      var html = "<tr><th></th>" + ms.map(function(m) { return "<th>" + (MODEL_LABEL[m] || m.toUpperCase()) + "</th>"; }).join("") + "</tr>";
       ms.forEach(function(m, i) {
-        html += "<tr><th>" + m.toUpperCase() + "</th>";
+        html += "<tr><th>" + (MODEL_LABEL[m] || m.toUpperCase()) + "</th>";
         ms.forEach(function(m2, j) {
           if (i === j) { html += "<td>—</td>"; return; }
           var pv = mat[i] ? mat[i][j] : null;
@@ -134,6 +194,201 @@ fetch("/api/stats/models").then(function(r) { return r.json(); }).then(function(
       document.getElementById("mcnemarWrap").style.display = "block";
     }
   }
+
+  renderDetailPanels(d);
+}).catch(function(e) {
+  document.getElementById("note").textContent = "数据加载失败: " + e.message;
 });
+
+function renderDetailPanels(d) {
+  var det = d.details;
+  if (!det || !Object.keys(det).length) { return; }
+  var cats = Object.keys(det);
+  fillSelect("cmCat", cats);
+  fillSelect("rocCat", cats);
+  onCmChange();
+  renderROC();
+  renderMetrics();
+}
+
+function fillSelect(id, cats) {
+  var el = document.getElementById(id);
+  el.innerHTML = cats.map(function(c) { return "<option value='" + c + "'>" + (CAT_LABEL[c] || c) + "</option>"; }).join("");
+}
+
+function cmModelOptions(cat) {
+  var det = expData.details[cat];
+  if (!det) return [];
+  var opts = [];
+  (det.models || []).forEach(function(m) { opts.push({ v: m.name, t: MODEL_LABEL[m.name] || m.name.toUpperCase() }); });
+  if (det.pipeline_cm3) opts.push({ v: "pipeline3", t: MODEL_LABEL.pipeline3 });
+  return opts;
+}
+
+function onCmChange() {
+  var cat = document.getElementById("cmCat").value;
+  var opts = cmModelOptions(cat);
+  var sel = document.getElementById("cmModel");
+  sel.innerHTML = opts.map(function(o) { return "<option value='" + o.v + "'>" + o.t + "</option>"; }).join("");
+  renderCM();
+}
+
+function cmData(cat, model) {
+  var det = expData.details[cat];
+  if (!det) return null;
+  if (model === "pipeline3") {
+    if (!det.pipeline_cm3) return null;
+    return { cm: det.pipeline_cm3.cm, labels: det.pipeline_cm3.labels };
+  }
+  var m = (det.models || []).filter(function(x) { return x.name === model; })[0];
+  if (!m || !m.cm) return null;
+  return { cm: m.cm, labels: m.cm_labels };
+}
+
+function renderCM() {
+  var cat = document.getElementById("cmCat").value;
+  var model = document.getElementById("cmModel").value;
+  var tip = document.getElementById("cmTip");
+  var data = cmData(cat, model);
+  if (!data) { tip.style.display = "block"; drawHeatmap(null); return; }
+  tip.style.display = "none";
+  drawHeatmap(data.cm, data.labels);
+}
+
+function drawHeatmap(cm, labels) {
+  var canvas = document.getElementById("cmCanvas");
+  var ctx = canvas.getContext("2d");
+  var px = canvas.width = 320, py = canvas.height = 320;
+  ctx.clearRect(0, 0, px, py);
+  if (!cm || !cm.length) return;
+  var n = cm.length, off = 46, cell = (px - off - 10) / n;
+  var maxv = 0;
+  cm.forEach(function(r) { r.forEach(function(v) { if (v > maxv) maxv = v; }); });
+  cm.forEach(function(row, i) {
+    row.forEach(function(v, j) {
+      var t = maxv ? v / maxv : 0;
+      ctx.fillStyle = "rgba(" + Math.round(8 + t * 12) + "," + Math.round(120 + t * 135) + "," + Math.round(200 + t * 55) + "," + (0.18 + 0.72 * t) + ")";
+      ctx.fillRect(off + j * cell, off + i * cell, cell, cell);
+      ctx.strokeStyle = "rgba(0,212,255,0.25)";
+      ctx.strokeRect(off + j * cell, off + i * cell, cell, cell);
+      ctx.fillStyle = t > 0.55 ? "#04121a" : "#e8edf5";
+      ctx.font = "bold 14px Inter, monospace";
+      ctx.textAlign = "center"; ctx.textBaseline = "middle";
+      ctx.fillText(v, off + j * cell + cell / 2, off + i * cell + cell / 2);
+    });
+  });
+  // 行标签（真实）
+  ctx.fillStyle = "#8899bb"; ctx.font = "12px Inter, 'Microsoft YaHei'";
+  ctx.textAlign = "right"; ctx.textBaseline = "middle";
+  labels.forEach(function(l, i) { ctx.fillText(LABEL_CN[l] || l, off - 8, off + i * cell + cell / 2); });
+  // 列标签（预测）
+  ctx.textAlign = "center";
+  labels.forEach(function(l, j) { ctx.fillText(LABEL_CN[l] || l, off + j * cell + cell / 2, off - 8); });
+  ctx.fillStyle = "#8899bb"; ctx.font = "11px Inter, 'Microsoft YaHei'";
+  ctx.textAlign = "left"; ctx.textBaseline = "alphabetic";
+  ctx.fillText("真实 ↓ / 预测 →", off, py - 4);
+}
+
+function renderROC() {
+  var cat = document.getElementById("rocCat").value;
+  var det = expData && expData.details ? expData.details[cat] : null;
+  var canvas = document.getElementById("rocChart");
+  if (rocChart) { rocChart.destroy(); rocChart = null; }
+  var datasets = [];
+  if (det) {
+    (det.models || []).forEach(function(m, i) {
+      if (m.roc && m.auc !== null && m.auc !== undefined) {
+        datasets.push({
+          label: (MODEL_LABEL[m.name] || m.name.toUpperCase()) + " (AUC=" + m.auc + ")",
+          data: m.roc.fpr.map(function(f, k) { return { x: f, y: m.roc.tpr[k] }; }),
+          borderColor: COLORS[i % COLORS.length], backgroundColor: "transparent",
+          borderWidth: 2, pointRadius: 0, tension: 0.1, fill: false
+        });
+      }
+    });
+  }
+  datasets.push({ label: "随机基线", data: [{ x: 0, y: 0 }, { x: 1, y: 1 }],
+                  borderColor: "rgba(136,153,187,0.5)", borderDash: [6, 4], borderWidth: 1, pointRadius: 0, fill: false });
+  rocChart = new Chart(canvas, {
+    type: "scatter",
+    data: { datasets: datasets },
+    options: {
+      responsive: true, maintainAspectRatio: false,
+      scales: {
+        x: { type: "linear", min: 0, max: 1, grid: { color: "rgba(0,212,255,0.06)" }, ticks: { color: "#8899bb", stepSize: 0.2 }, title: { display: true, text: "假阳性率 FPR", color: "#8899bb", font: { size: 11 } } },
+        y: { min: 0, max: 1, grid: { color: "rgba(0,212,255,0.06)" }, ticks: { color: "#8899bb", stepSize: 0.2 }, title: { display: true, text: "真阳性率 TPR", color: "#8899bb", font: { size: 11 } } }
+      },
+      plugins: { legend: { labels: { color: "#8899bb", font: { size: 10 } } } }
+    }
+  });
+}
+
+function renderMetrics() {
+  var html = "<tr><th>品类</th><th>模型</th><th>准确率%</th><th>精确率</th><th>召回率</th><th>F1</th><th>AUC</th><th>样本</th><th>耗时ms</th></tr>";
+  Object.keys(expData.details).forEach(function(cat) {
+    var det = expData.details[cat];
+    (det.models || []).forEach(function(m) {
+      html += "<tr><td>" + (CAT_LABEL[cat] || cat) + "</td><td>" + (MODEL_LABEL[m.name] || m.name.toUpperCase()) + "</td>"
+        + "<td class='num'>" + m.accuracy + "</td>"
+        + "<td class='num'>" + (m.precision && m.precision[1] !== undefined ? m.precision[1].toFixed(3) : "—") + "</td>"
+        + "<td class='num'>" + (m.recall && m.recall[1] !== undefined ? m.recall[1].toFixed(3) : "—") + "</td>"
+        + "<td class='num'>" + (m.f1 && m.f1[1] !== undefined ? m.f1[1].toFixed(3) : "—") + "</td>"
+        + "<td class='num'>" + (m.auc !== null && m.auc !== undefined ? m.auc : "—") + "</td>"
+        + "<td class='num'>" + m.n + "</td>"
+        + "<td class='num'>" + (m.latency_ms !== null && m.latency_ms !== undefined ? m.latency_ms : "—") + "</td></tr>";
+    });
+    if (det.grade_accuracy !== null && det.grade_accuracy !== undefined) {
+      html += "<tr><td>" + (CAT_LABEL[cat] || cat) + "</td><td>" + MODEL_LABEL.pipeline + "</td>"
+        + "<td class='num'>" + det.grade_accuracy + "</td><td>—</td><td>—</td><td>—</td><td>—</td>"
+        + "<td class='num'>" + det.n + "</td><td>—</td></tr>";
+    }
+  });
+  document.getElementById("metricTable").innerHTML = html;
+}
+
+function exportCSV() {
+  if (!expData || !expData.details) { alert("暂无实验数据可导出"); return; }
+  var rows = [["品类", "模型", "准确率%", "精确率(不合格)", "召回率(不合格)", "F1(不合格)", "AUC", "样本数", "平均耗时ms"]];
+  Object.keys(expData.details).forEach(function(cat) {
+    var det = expData.details[cat];
+    (det.models || []).forEach(function(m) {
+      rows.push([CAT_LABEL[cat] || cat, MODEL_LABEL[m.name] || m.name, m.accuracy,
+                 m.precision && m.precision[1] !== undefined ? m.precision[1] : "",
+                 m.recall && m.recall[1] !== undefined ? m.recall[1] : "",
+                 m.f1 && m.f1[1] !== undefined ? m.f1[1] : "",
+                 m.auc, m.n, m.latency_ms]);
+    });
+    if (det.grade_accuracy !== null && det.grade_accuracy !== undefined) {
+      rows.push([CAT_LABEL[cat] || cat, "传统管线", det.grade_accuracy, "", "", "", "", det.n, ""]);
+    }
+  });
+  var csv = rows.map(function(r) { return r.map(function(x) { return x === null || x === undefined ? "" : x; }).join(","); }).join("\n");
+  downloadBlob("\ufeff" + csv, "experiment_metrics.csv", "text/csv;charset=utf-8");
+}
+
+function downloadBlob(content, name, type) {
+  var blob = new Blob([content], { type: type });
+  var a = document.createElement("a");
+  a.href = URL.createObjectURL(blob);
+  a.download = name;
+  document.body.appendChild(a); a.click();
+  setTimeout(function() { URL.revokeObjectURL(a.href); a.remove(); }, 500);
+}
+
+function exportHeatmap() {
+  var c = document.getElementById("cmCanvas");
+  if (!c || c.width < 10) { alert("暂无混淆矩阵可导出"); return; }
+  var a = document.createElement("a");
+  a.href = c.toDataURL("image/png"); a.download = "confusion_matrix.png";
+  document.body.appendChild(a); a.click(); a.remove();
+}
+
+function exportChart(chartId, name) {
+  var inst = window[chartId] || (chartId === "modelChart" ? modelChart : chartId === "avgChart" ? avgChart : rocChart);
+  if (!inst) { alert("图表尚未生成"); return; }
+  var a = document.createElement("a");
+  a.href = inst.toBase64Image("image/png"); a.download = name + ".png";
+  document.body.appendChild(a); a.click(); a.remove();
+}
 </script>
 {% endblock %}

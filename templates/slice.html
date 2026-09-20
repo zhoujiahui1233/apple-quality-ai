@@ -1,0 +1,467 @@
+{% extends "base.html" %}
+{% block title %}切片检测{% endblock %}
+{% block content %}
+<style>
+.slice-wrap { max-width: 1180px; margin: 0 auto; }
+.slice-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
+@media (max-width: 900px) { .slice-grid { grid-template-columns: 1fr; } }
+.slice-card { background: rgba(12,20,38,0.75); border: 1px solid var(--border); border-radius: 14px; padding: 16px; margin-bottom: 14px; backdrop-filter: blur(10px); }
+.slice-card h4 { font-size: 14px; color: var(--primary); margin: 0 0 10px; }
+.slice-drop { border: 2px dashed var(--border); border-radius: 12px; padding: 24px; text-align: center; color: var(--text-dim); cursor: pointer; transition: .2s; }
+.slice-drop:hover, .slice-drop.drag { border-color: var(--primary); color: var(--primary); }
+.slice-img { width: 100%; border-radius: 10px; margin-top: 10px; border: 1px solid var(--border); }
+.slice-badge { display: inline-block; padding: 6px 14px; border-radius: 10px; font-weight: 700; font-size: 14px; }
+.slice-ok { background: rgba(0,255,136,0.15); color: var(--accent); }
+.slice-warn { background: rgba(255,170,0,0.15); color: #ffb020; }
+.slice-bad { background: rgba(255,71,87,0.15); color: var(--danger); }
+.slice-metric { display: flex; justify-content: space-between; font-size: 13px; padding: 6px 0; border-bottom: 1px solid rgba(255,255,255,0.06); }
+.slice-metric span:first-child { color: var(--text-dim); }
+.slice-metric b { font-family: ui-monospace, Consolas, "Courier New", monospace; }
+.slice-advice { font-size: 12px; color: var(--text-dim); margin-top: 8px; line-height: 1.6; }
+.slice-stats { display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px; margin-bottom: 14px; }
+@media (max-width: 700px) { .slice-stats { grid-template-columns: repeat(2, 1fr); } }
+.slice-stat { background: rgba(12,20,38,0.75); border: 1px solid var(--border); border-radius: 12px; padding: 12px 14px; backdrop-filter: blur(10px); }
+.slice-stat .v { font-family: ui-monospace, Consolas, monospace; font-size: 22px; font-weight: 700; color: var(--primary); }
+.slice-stat .k { font-size: 11px; color: var(--text-dim); margin-top: 2px; }
+.slice-recent { width: 100%; font-size: 12px; border-collapse: collapse; }
+.slice-recent th, .slice-recent td { padding: 6px 8px; border-bottom: 1px solid rgba(255,255,255,0.06); text-align: left; }
+.slice-recent th { color: var(--text-dim); font-weight: 600; }
+.slice-engine { display: inline-block; padding: 3px 10px; border-radius: 8px; font-size: 11px; margin: 2px 4px 2px 0; }
+.slice-engine.on { background: rgba(0,212,255,0.15); color: var(--primary); }
+.slice-engine.off { background: rgba(255,71,87,0.12); color: var(--danger); }
+.slice-tip { font-size: 12px; color: var(--text-dim); line-height: 1.9; margin: 0; padding-left: 18px; }
+</style>
+
+<div class="slice-wrap">
+  <div style="margin-bottom:14px;">
+    <h3 style="margin:0 0 4px;font-size:18px;"><i class="fas fa-cut" style="color:var(--primary);"></i> 切片检测 · 实时监测</h3>
+    <div style="font-size:12px;color:var(--text-dim);">
+      本模块独立于外观检测，数据自动入库到「切片」分类（历史/统计/数据集均分流）。<br>
+      视觉：上传切片照片 → 自动分割区域、统计褐变面积占比（BI），输出 1~5 级褐变等级。 嗅觉：上传电子鼻 CSV 预测新鲜度。测试结果自动保存到历史。
+    </div>
+  </div>
+
+  <div class="slice-stats">
+    <div class="slice-stat"><div class="v" id="stToday">--</div><div class="k">今日检测</div></div>
+    <div class="slice-stat"><div class="v" id="stTotal">--</div><div class="k">累计检测</div></div>
+    <div class="slice-stat"><div class="v" id="stAvgBrown">--</div><div class="k">平均褐变占比</div></div>
+    <div class="slice-stat"><div class="v" id="stLevel2">--</div><div class="k">二级以上占比</div></div>
+  </div>
+  <div style="margin-bottom:14px;font-size:12px;color:var(--text-dim);">
+    视觉引擎：
+    <button class="slice-engine on" id="engRule" onclick="setSliceEngine('rule')" style="cursor:pointer;"><i class="fas fa-cut"></i> 规则算法</button>
+    <button class="slice-engine" id="engUnet" onclick="setSliceEngine('unet')" style="cursor:pointer;"><i class="fas fa-brain"></i> U-Net 分割 <span id="unetState"></span></button>
+    <span class="slice-engine" id="engEnose" style="margin-left:10px;"><i class="fas fa-wind"></i> 切片电子鼻模型</span>
+  </div>
+  <div class="slice-grid">
+    <!-- 视觉 -->
+    <div>
+      <div class="slice-card">
+        <h4><i class="fas fa-camera"></i> 视觉 · 褐变检测</h4>
+        <div class="slice-drop" id="sliceVdrop">
+          <i class="fas fa-cloud-upload-alt" style="font-size:32px;margin-bottom:8px;display:block;"></i>
+          点击或拖拽切片照片到此处（JPG/PNG）
+        </div>
+        <div id="sliceVcam" class="d-none" style="position:relative;background:#000;border-radius:10px;overflow:hidden;margin-top:10px;">
+          <video id="sliceVideo" autoplay playsinline style="width:100%;max-height:420px;object-fit:contain;"></video>
+          <canvas id="sliceCanvas" class="d-none"></canvas>
+          <div style="position:absolute;bottom:10px;left:50%;transform:translateX(-50%);display:flex;gap:8px;z-index:2;white-space:nowrap;">
+            <button class="btn-d btn-sm2" onclick="stopSliceCamera()"><i class="fas fa-stop"></i> 关闭</button>
+            <button class="btn-a btn-sm2" onclick="sliceCaptureAndDetect(true)"><i class="fas fa-camera"></i> 拍照检测</button>
+            <button class="btn-p btn-sm2" onclick="sliceStartContinuous()" id="sliceContBtn"><i class="fas fa-sync-alt"></i> 连续监测</button>
+          </div>
+        </div>
+        <div style="margin-top:10px;display:flex;align-items:center;gap:8px;flex-wrap:wrap;">
+          <button class="btn-a btn-sm2" onclick="toggleSliceCamera()" id="sliceCamBtn"><i class="fas fa-camera"></i> 打开摄像头拍照</button>
+          <span style="font-size:11px;color:var(--text-dim);">拍照检测会存入历史；连续监测每 3 秒自动抓帧、不写入历史</span>
+        </div>
+        <div style="margin-top:8px;display:flex;align-items:center;gap:14px;flex-wrap:wrap;font-size:12px;color:var(--text-dim);">
+          <label style="display:inline-flex;align-items:center;gap:6px;cursor:pointer;color:var(--text);">
+            <input type="checkbox" id="sliceLogCsv" style="accent-color:var(--primary);"> 连续监测时自动记录到 CSV（实验数据）
+          </label>
+          <a id="sliceLogLink" href="/api/slice/monitor_log/download" style="display:none;"><i class="fas fa-download"></i> 下载日志</a>
+          <button class="btn-d btn-sm2" id="sliceLogClear" style="display:none;" onclick="clearSliceLog()"><i class="fas fa-trash-alt"></i> 清空日志</button>
+          <span id="sliceLogStatus"></span>
+        </div>
+        <input type="file" id="sliceVfile" accept="image/*" style="display:none;">
+        <div id="sliceVmsg" style="font-size:12px;color:var(--text-dim);margin-top:8px;"></div>
+        <img class="slice-img" id="sliceVimg" style="display:none;" alt="切片标注图">
+        <div id="sliceVresult" style="display:none;margin-top:12px;">
+          <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px;">
+            <span class="slice-badge" id="sliceVbadge"></span>
+          </div>
+          <div style="margin-top:10px;">
+            <div class="slice-metric"><span>褐变面积占比</span><b id="sliceRatio">--</b></div>
+            <div class="slice-metric"><span>褐变指数 BI（面积法 / Lab 法）</span><b id="sliceBI">--</b></div>
+            <div class="slice-metric"><span>褐变像素 / 果肉像素（已排除果核·果皮）</span><b id="slicePx">--</b></div>
+<div class="slice-metric"><span>分环褐变占比（内 / 中 / 外）</span><b id="sliceRing" style="font-size:12px;">--</b></div>
+<div class="slice-metric"><span>检测引擎</span><b id="sliceVengine" style="font-size:12px;">--</b></div>
+          </div>
+          <div class="slice-advice" id="sliceVadvice"></div>
+          <div style="margin-top:12px;display:flex;align-items:center;gap:10px;flex-wrap:wrap;">
+            <button class="btn btn-success btn-sm" onclick="saveSliceToDataset()"><i class="fas fa-database"></i> 存入切片数据集</button>
+            <span id="sliceSaveMsg" style="font-size:12px;"></span>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- 嗅觉 -->
+    <div>
+      <div class="slice-card">
+        <h4><i class="fas fa-wind"></i> 嗅觉 · 电子鼻预测</h4>
+        <div class="slice-drop" id="sliceOdrop">
+          <i class="fas fa-cloud-upload-alt" style="font-size:32px;margin-bottom:8px;display:block;"></i>
+          点击或拖拽气味采样 CSV 到此处
+        </div>
+        <input type="file" id="sliceOfile" accept=".csv" style="display:none;">
+        <div id="sliceOmsg" style="font-size:12px;color:var(--text-dim);margin-top:8px;"></div>
+        <div id="sliceOresult" style="display:none;margin-top:12px;">
+          <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;">
+            <span class="slice-badge" id="sliceObadge">--</span>
+            <span style="font-size:12px;color:var(--text-dim);" id="sliceOmodel"></span>
+          </div>
+          <div class="slice-advice" id="sliceOproba"></div>
+          <div class="slice-advice" id="sliceOreg" style="display:none;"></div>
+          <div style="height:200px;position:relative;margin-top:10px;"><canvas id="sliceOchart"></canvas></div>
+        </div>
+      </div>
+
+      <!-- 综合 -->
+      <div class="slice-card">
+        <h4><i class="fas fa-project-diagram"></i> 视觉 + 嗅觉 综合状态</h4>
+        <div id="sliceFusion" style="font-size:13px;color:var(--text-dim);">
+          分别上传切片照片与气味 CSV 后，此处自动给出综合结论。
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="slice-card">
+    <h4><i class="fas fa-flask"></i> 鲜切苹果采样建议（照做即可采集实验数据）</h4>
+    <ol class="slice-tip">
+      <li>苹果洗净去皮与否均可，切成约 1cm 厚片（每批厚度尽量一致）</li>
+      <li>按时间梯度拍照 + 测气味：0 / 30 / 60 / 120 / 240 min，同一片连测更佳</li>
+      <li>气味采集：密封罐顶空采样，<code>python enose/collect.py --port COMx --label slice_0min --out data/raw/s001_slice_0min.csv</code></li>
+      <li>护色剂对比：对照组 / VC 浸泡组 / 柠檬酸浸泡组，各 5 片，4 小时内动态测量</li>
+      <li>拍照时固定机位与光源，浅色背景，切片尽量居中</li>
+    </ol>
+  </div>
+
+  <div class="slice-card">
+    <h4><i class="fas fa-history"></i> 最近切片检测</h4>
+    <table class="slice-recent">
+      <thead><tr><th>时间</th><th>等级</th><th>状态</th><th>褐变占比</th><th></th></tr></thead>
+      <tbody id="sliceRecent"><tr><td colspan="5" style="color:var(--text-dim);">还没有检测记录，上传一张切片照片试试吧</td></tr></tbody>
+    </table>
+  </div>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/chart.js">// ---------- 监测统计 / 引擎 / 最近记录 ----------
+function loadSliceDashboard() {
+  fetch('/api/stats?category=apple_slice').then(function (r) { return r.json(); }).then(function (d) {
+    var total = d.total || 0;
+    document.getElementById('stTotal').textContent = total;
+    var l2 = (d.reject || 0) + (d.standard || 0) - (d.standard || 0);
+    document.getElementById('stLevel2').textContent = total ? (d.standard + d.reject) + '' : '--';
+  }).catch(function () {});
+  fetch('/api/stats/daily?days=1&category=apple_slice').then(function (r) { return r.json(); }).then(function (d) {
+    var today = d && d.length ? (d[d.length - 1].total || 0) : 0;
+    document.getElementById('stToday').textContent = today;
+  }).catch(function () {});
+  fetch('/api/models/status').then(function (r) { return r.json(); }).then(function (d) {
+    var m = (d.slice || []).filter(function (x) { return x.key === 'enose_slice'; })[0];
+    var el = document.getElementById('engEnose');
+    if (m && m.exists) {
+      el.classList.add('on');
+      el.innerHTML = '<i class="fas fa-wind"></i> 切片电子鼻模型（已训练）';
+    } else {
+      el.classList.add('off');
+      el.innerHTML = '<i class="fas fa-wind"></i> 切片电子鼻模型（未训练，采集后可训练）';
+    }
+  }).catch(function () {});
+  fetch('/api/slice/recent').then(function (r) { return r.json(); }).then(function (list) {
+    var tb = document.getElementById('sliceRecent');
+    if (!list || !list.length) return;
+    tb.innerHTML = list.map(function (r) {
+      var pct = (r.defect_ratio * 100).toFixed(1) + '%';
+      return '<tr><td>' + r.created_at + '</td><td>' + (r.severity || '') + '</td><td>' + r.grade + '</td><td>' + pct + '</td><td><a href="/detail/' + r.id + '" style="color:var(--primary);">查看</a></td></tr>';
+    }).join('');
+  }).catch(function () {});
+}
+loadSliceDashboard();
+refreshSliceLog();
+refreshUnetState();
+
+</script>
+<script>
+var sliceChart = null;
+
+function bindDrop(dropId, fileId, fn) {
+  var drop = document.getElementById(dropId), file = document.getElementById(fileId);
+  drop.onclick = function () { file.click(); };
+  drop.ondragover = function (e) { e.preventDefault(); drop.classList.add('drag'); };
+  drop.ondragleave = function () { drop.classList.remove('drag'); };
+  drop.ondrop = function (e) {
+    e.preventDefault(); drop.classList.remove('drag');
+    if (e.dataTransfer.files.length) fn(e.dataTransfer.files[0]);
+  };
+  file.onchange = function () { if (file.files.length) fn(file.files[0]); };
+}
+
+// ---------- 视觉引擎切换 ----------
+window._sliceEngine = localStorage.getItem('sliceVisionEngine') || 'auto';
+function setSliceEngine(e) {
+  window._sliceEngine = (e === 'unet') ? 'unet' : 'rule';
+  localStorage.setItem('sliceVisionEngine', window._sliceEngine);
+  var r = document.getElementById('engRule');
+  var u = document.getElementById('engUnet');
+  if (r) r.className = 'slice-engine' + (window._sliceEngine !== 'unet' ? ' on' : ' off');
+  if (u) u.className = 'slice-engine' + (window._sliceEngine === 'unet' ? ' on' : ' off');
+}
+function refreshUnetState() {
+  fetch('/api/models/status').then(function (r) { return r.json(); }).then(function (d) {
+    var m = (d.slice || []).filter(function (x) { return x.key === 'slice_unet'; })[0];
+    var el = document.getElementById('unetState');
+    if (!el) return;
+    if (m && m.exists) {
+      el.innerHTML = '<span style="color:var(--accent);">（已训练 ' + m.updated + '）</span>';
+    } else {
+      el.innerHTML = '<span style="color:var(--warning);">（未训练，用规则算法）</span>';
+    }
+  }).catch(function () {});
+}
+setSliceEngine(window._sliceEngine);
+
+// ---------- 视觉 ----------
+bindDrop('sliceVdrop', 'sliceVfile', doVision);
+function doVision(file, opts) {
+  opts = opts || {};
+  var fd = new FormData();
+  fd.append('file', file);
+  if (opts.save === false) fd.append('save', '0');
+  if (opts.logCsv) { fd.append('log_csv', '1'); fd.append('src', 'camera'); }
+  fd.append('engine', window._sliceEngine || 'auto');
+  document.getElementById('sliceVmsg').textContent = '视觉检测中...';
+  fetch('/api/slice/detect', { method: 'POST', body: fd })
+    .then(function (r) { return r.json(); })
+    .then(function (res) {
+      if (res.error) { document.getElementById('sliceVmsg').textContent = '失败：' + res.error; return; }
+      document.getElementById('sliceVmsg').textContent = '';
+      document.getElementById('sliceVimg').src = res.annotated_url + '?t=' + Date.now();
+      document.getElementById('sliceVimg').style.display = 'block';
+      document.getElementById('sliceRatio').textContent = res.browning_ratio + '%';
+      document.getElementById('sliceBI').textContent = res.bi_pct + ' / ' + (res.bi_lab == null ? '--' : res.bi_lab);
+      document.getElementById('slicePx').textContent = res.browning_px + ' / ' + (res.flesh_px || res.slice_px);
+      var ringEl = document.getElementById('sliceRing');
+      if (ringEl) {
+        var r = res.ring || {};
+        ringEl.textContent = '内环 ' + (r.inner ? r.inner.ratio : '--') + '% · 中环 ' + (r.mid ? r.mid.ratio : '--') + '% · 外环 ' + (r.outer ? r.outer.ratio : '--') + '%';
+      }
+      var engEl = document.getElementById('sliceVengine');
+      if (engEl) engEl.textContent = res.engine || (res.engine_key || '--');
+      var badge = document.getElementById('sliceVbadge');
+      badge.textContent = res.grade + '级 · ' + res.status;
+      badge.className = 'slice-badge ' + (res.grade <= 2 ? 'slice-ok' : (res.grade <= 3 ? 'slice-warn' : 'slice-bad'));
+      document.getElementById('sliceVadvice').textContent = '建议：' + res.advice;
+      document.getElementById('sliceVresult').style.display = 'block';
+      window._sliceGrade = res.grade;
+      window._sliceFile = file;
+      window._sliceRecordId = res.record_id || null;
+      if (typeof res.log_rows === 'number') refreshSliceLog(res.log_rows);
+      var sm = document.getElementById('sliceSaveMsg');
+      if (sm) { sm.textContent = ''; sm.style.color = ''; }
+      maybeFusion();
+    })
+    .catch(function (e) { document.getElementById('sliceVmsg').textContent = '请求失败：' + e; });
+}
+
+function saveSliceToDataset() {
+  var f = window._sliceFile;
+  if (!f) { alert('请先上传切片照片进行检测'); return; }
+  var g = window._sliceGrade || 1;
+  var label = g <= 2 ? '合格' : '不合格';
+  var btn = document.querySelector('#sliceVresult button');
+  var msg = document.getElementById('sliceSaveMsg');
+  if (btn) btn.disabled = true;
+  if (msg) { msg.textContent = '正在存入...'; msg.style.color = 'var(--text-dim)'; }
+  var fd = new FormData();
+  fd.append('file', f);
+  fd.append('category', 'apple_slice');
+  fd.append('label', label);
+  if (g > 2) fd.append('defect_type', '褐变');
+  if (window._sliceRecordId) fd.append('record_id', window._sliceRecordId);
+  fd.append('options', JSON.stringify({crop: false}));
+  fetch('/api/collect', { method: 'POST', body: fd })
+    .then(function (r) { return r.json(); })
+    .then(function (d) {
+      if (d.error) { if (msg) { msg.textContent = '未存入：' + d.error; msg.style.color = 'var(--danger)'; } }
+      else if (msg) { msg.textContent = '已存入切片数据集（' + label + '）'; msg.style.color = 'var(--accent)'; }
+    })
+    .catch(function (e) { if (msg) { msg.textContent = '存入失败：' + e; msg.style.color = 'var(--danger)'; } })
+    .then(function () { if (btn) btn.disabled = false; });
+}
+
+// ---------- 摄像头实时监测（与外观检测一致） ----------
+var sliceCamStream = null;
+var sliceContInterval = null;
+
+function toggleSliceCamera() {
+  var cam = document.getElementById('sliceVcam');
+  if (cam && !cam.classList.contains('d-none')) { stopSliceCamera(); return; }
+  if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+    alert('浏览器不支持摄像头访问（需要 HTTPS 或 localhost）'); return;
+  }
+  navigator.mediaDevices.getUserMedia({ video: { facingMode: 'environment', width: { ideal: 800 }, height: { ideal: 600 } }, audio: false })
+    .then(function (s) {
+      sliceCamStream = s;
+      document.getElementById('sliceVideo').srcObject = s;
+      if (cam) cam.classList.remove('d-none');
+      document.getElementById('sliceVdrop').style.display = 'none';
+      var btn = document.getElementById('sliceCamBtn');
+      if (btn) btn.innerHTML = '<i class="fas fa-video"></i> 摄像头已开启';
+    })
+    .catch(function (e) { alert('摄像头访问失败: ' + e.message); });
+}
+
+function stopSliceCamera() {
+  if (sliceContInterval) { clearInterval(sliceContInterval); sliceContInterval = null; }
+  if (sliceCamStream) { sliceCamStream.getTracks().forEach(function (t) { t.stop(); }); sliceCamStream = null; }
+  var cam = document.getElementById('sliceVcam');
+  if (cam) cam.classList.add('d-none');
+  document.getElementById('sliceVdrop').style.display = '';
+  var btn = document.getElementById('sliceCamBtn');
+  if (btn) btn.innerHTML = '<i class="fas fa-camera"></i> 打开摄像头拍照';
+  var cb = document.getElementById('sliceContBtn');
+  if (cb) cb.innerHTML = '<i class="fas fa-sync-alt"></i> 连续监测';
+}
+
+function sliceCaptureAndDetect(saveHistory) {
+  var video = document.getElementById('sliceVideo');
+  if (!video.videoWidth || !video.videoHeight) { alert('视频流尚未准备好'); return; }
+  var canvas = document.getElementById('sliceCanvas');
+  canvas.width = video.videoWidth;
+  canvas.height = video.videoHeight;
+  canvas.getContext('2d').drawImage(video, 0, 0);
+  canvas.toBlob(function (blob) {
+    var file = new File([blob], 'slice_camera.jpg', { type: 'image/jpeg' });
+    doVision(file, { save: !!saveHistory, logCsv: !saveHistory && isSliceLogOn() });
+  }, 'image/jpeg', 0.85);
+}
+
+function sliceStartContinuous() {
+  if (sliceContInterval) {
+    clearInterval(sliceContInterval); sliceContInterval = null;
+    document.getElementById('sliceContBtn').innerHTML = '<i class="fas fa-sync-alt"></i> 连续监测';
+    return;
+  }
+  sliceCaptureAndDetect(false);
+  sliceContInterval = setInterval(function () { sliceCaptureAndDetect(false); }, 3000);
+  document.getElementById('sliceContBtn').innerHTML = '<i class="fas fa-stop"></i> 停止连续';
+}
+
+function isSliceLogOn() {
+  var cb = document.getElementById('sliceLogCsv');
+  return !!(cb && cb.checked);
+}
+
+function refreshSliceLog(rowsHint) {
+  fetch('/api/slice/monitor_log').then(function (r) { return r.json(); }).then(function (d) {
+    var link = document.getElementById('sliceLogLink');
+    var clear = document.getElementById('sliceLogClear');
+    var st = document.getElementById('sliceLogStatus');
+    var rows = (d && typeof d.rows === 'number') ? d.rows : (rowsHint || 0);
+    if (d && d.exists) {
+      if (link) link.style.display = 'inline-block';
+      if (clear) clear.style.display = 'inline-block';
+      if (st) st.textContent = '已记录 ' + rows + ' 条（slice_monitor_log.csv' + (d.updated_at ? '，更新于 ' + d.updated_at : '') + '）';
+    } else {
+      if (link) link.style.display = 'none';
+      if (clear) clear.style.display = 'none';
+      if (st) st.textContent = '';
+    }
+  }).catch(function () {});
+}
+
+function clearSliceLog() {
+  if (!confirm('确定清空连续监测日志 CSV 吗？清空后无法恢复。')) return;
+  fetch('/api/slice/monitor_log/clear', { method: 'POST' })
+    .then(function (r) { return r.json(); })
+    .then(function (d) {
+      refreshSliceLog(0);
+      if (d && d.error) alert('清空失败：' + d.error);
+    })
+    .catch(function (e) { alert('清空失败：' + e); });
+}
+
+// ---------- 嗅觉 ----------
+bindDrop('sliceOdrop', 'sliceOfile', doOdor);
+function doOdor(file) {
+  var fd = new FormData();
+  fd.append('file', file);
+  document.getElementById('sliceOmsg').textContent = '气味分析中...';
+  fetch('/api/enose/predict?module=slice', { method: 'POST', body: fd })
+    .then(function (r) { return r.json(); })
+    .then(function (res) {
+      if (res.error) { document.getElementById('sliceOmsg').textContent = '失败：' + res.error; return; }
+      document.getElementById('sliceOmsg').textContent = '';
+      document.getElementById('sliceOresult').style.display = 'block';
+      document.getElementById('sliceObadge').textContent = res.prediction || '未训练模型';
+      document.getElementById('sliceObadge').className = 'slice-badge slice-ok';
+      document.getElementById('sliceOmodel').textContent = res.model ? ('模型：' + res.model) : '';
+      var p = (res.proba || []).map(function (x) { return x.k + ': ' + (x.v * 100).toFixed(1) + '%'; }).join('　');
+      document.getElementById('sliceOproba').textContent = p;
+      var regEl = document.getElementById('sliceOreg');
+      if (regEl) {
+        if (res.regression && res.regression.value !== null && res.regression.value !== undefined) {
+          regEl.style.display = '';
+          regEl.textContent = '预测' + res.regression.target + ': ' + res.regression.value + ' ' + res.regression.unit;
+        } else {
+          regEl.style.display = 'none';
+        }
+      }
+      window._sliceOdor = res.prediction || '';
+      drawSliceChart(res.curves, res.channels);
+      maybeFusion();
+    })
+    .catch(function (e) { document.getElementById('sliceOmsg').textContent = '请求失败：' + e; });
+}
+
+function drawSliceChart(curves, channels) {
+  var labels = [];
+  if (curves && curves[0]) for (var i = 0; i < curves[0].length; i++) labels.push(i);
+  var ds = (curves || []).map(function (c, i) {
+    var colors = ['#00d4ff', '#ff9f43', '#ff4757', '#2ed573', '#ffd93d', '#a29bfe', '#74b9ff', '#fd79a8', '#55efc4', '#ffeaa7'];
+    return { label: channels[i], data: c, borderColor: colors[i % colors.length], borderWidth: 1.5, pointRadius: 0, tension: 0.25 };
+  });
+  if (sliceChart) sliceChart.destroy();
+  sliceChart = new Chart(document.getElementById('sliceOchart'), {
+    type: 'line',
+    data: { labels: labels, datasets: ds },
+    options: {
+      responsive: true, maintainAspectRatio: false,
+      animation: false,
+      plugins: { legend: { labels: { color: '#9fb3c8', font: { size: 10 } } } },
+      scales: {
+        x: { ticks: { color: '#9fb3c8', font: { size: 9 } }, grid: { color: 'rgba(255,255,255,0.05)' } },
+        y: { ticks: { color: '#9fb3c8', font: { size: 9 } }, grid: { color: 'rgba(255,255,255,0.05)' } }
+      }
+    }
+  });
+}
+
+// ---------- 综合 ----------
+function maybeFusion() {
+  var g = window._sliceGrade, o = window._sliceOdor;
+  var box = document.getElementById('sliceFusion');
+  if (g === undefined && !o) return;
+  var lines = [];
+  if (g !== undefined) lines.push('视觉褐变等级：' + g + ' 级');
+  if (o) lines.push('电子鼻预测：' + o);
+  var warn = (g !== undefined && g >= 4) || /rotten|bad|\u52a3\u53d8|\u8150/i.test(o || '');
+  var mid = (g !== undefined && g >= 3) || /mid/i.test(o || '');
+  box.innerHTML = lines.join('<br>') + '<br><b style="color:' + (warn ? 'var(--danger)' : (mid ? '#ffb020' : 'var(--accent)')) + ';">' +
+    (warn ? '预警：已接近不可食用，建议立即处理' : (mid ? '注意：品质下降中，尽快食用或加工' : '正常：鲜切状态良好')) + '</b>';
+}
+</script>
+{% endblock %}

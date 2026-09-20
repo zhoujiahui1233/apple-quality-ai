@@ -1,0 +1,309 @@
+{% extends "base.html" %}
+{% block title %}多果追踪 · 逐果定级{% endblock %}
+{% block content %}
+<style>
+.rt-area { position: relative; background: #000; border-radius: 12px; overflow: hidden; }
+.rt-area video, .rt-area canvas { width: 100%; display: block; }
+.rt-area canvas.ov { position: absolute; inset: 0; width: 100%; height: 100%; pointer-events: none; }
+.badge-live { position: absolute; top: 10px; left: 12px; z-index: 3; background: rgba(0,0,0,0.65); padding: 4px 12px; border-radius: 8px; font-size: 12px; }
+.rt-tools { display: flex; gap: 8px; flex-wrap: wrap; margin: 10px 0; }
+.mini-chip { display:inline-block; padding:2px 8px; border-radius:6px; font-size:11px; margin:2px 4px 2px 0; border:1px solid var(--border); }
+.g-bad { color:#ff4757; border-color:#ff4757; }
+.g-std { color:#ffc107; border-color:#ffc107; }
+.g-good{ color:#00ff88; border-color:#00ff88; }
+</style>
+
+<div class="row g-3">
+  <div class="col-lg-8">
+    <div class="glass-card">
+      <div class="panel-head">
+        <span class="t"><i class="fas fa-video"></i> 实时多果框选追踪</span>
+        <span class="hint-text" id="rtLive">● 未开启</span>
+      </div>
+      <div class="rt-area" id="rtArea" style="min-height:360px;">
+        <video id="rtVideo" autoplay playsinline muted style="min-height:360px;object-fit:contain;"></video>
+        <div id="rtBoxLayer" class="ov"></div>
+        <div class="badge-live" id="rtBadge"><i class="fas fa-apple"></i> 苹果数：0</div>
+      </div>
+      <div class="rt-tools">
+        <button class="btn-a btn-sm2" onclick="rtStart()" id="rtStartBtn"><i class="fas fa-play"></i> 开始追踪</button>
+        <button class="btn-d btn-sm2" onclick="rtStop()"><i class="fas fa-stop"></i> 停止</button>
+        <button class="btn-p btn-sm2" onclick="rtGradeNow()" id="rtGradeBtn"><i class="fas fa-microchip"></i> 逐果定级</button>
+        <span style="border-left:1px solid var(--border);padding-left:10px;display:flex;align-items:center;gap:8px;font-size:12px;color:var(--text-dim);">
+          自动定级：
+          <input type="checkbox" id="rtAuto" checked style="accent-color:var(--primary);"> 每 3 秒
+        </span>
+      </div>
+      <div class="panel-body">
+        <div id="rtGradeWrap" class="d-none">
+          <div class="t" style="font-size:13px;margin-bottom:8px;"><i class="fas fa-list"></i> 逐果结果</div>
+          <div id="rtGradeList"></div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="col-lg-4">
+    <div class="glass-card">
+      <div class="panel-head"><span class="t"><i class="fas fa-file-image"></i> 单图多果定级</span></div>
+      <div class="panel-body">
+        <p style="font-size:12px;color:var(--text-dim);">上传一张含多个苹果的图片，对每个苹果分别定级并编号。</p>
+        <div class="dropzone d-flex flex-column align-items-center justify-content-center"
+             style="border:1px dashed var(--border);border-radius:10px;min-height:140px;cursor:pointer;"
+             onclick="document.getElementById('rtFile').click()">
+          <i class="fas fa-cloud-upload-alt" style="font-size:34px;color:var(--primary-dim);margin-bottom:8px;"></i>
+          <span style="font-size:12px;color:var(--text-dim);">点击选择图片</span>
+          <input type="file" id="rtFile" class="d-none" accept="image/*">
+        </div>
+        <div id="rtImgWrap" class="d-none mt-2" style="position:relative;margin-top:12px;">
+          <img id="rtImg" style="width:100%;border-radius:8px;display:block;" alt="">
+          <canvas id="rtImgOv" style="position:absolute;inset:0;width:100%;height:100%;pointer-events:none;"></canvas>
+        </div>
+        <div id="rtImgList" class="mt-2"></div>
+      </div>
+    </div>
+
+    <div class="glass-card mt-3">
+      <div class="panel-head"><span class="t"><i class="fas fa-info-circle"></i> 使用说明</span></div>
+      <div class="panel-body" style="font-size:12px;color:var(--text-dim);line-height:1.9;">
+        ① 摄像头需 HTTPS 或 localhost 环境（本机 127.0.0.1 可直开）；<br>
+        ② 手机访问请用启动日志打印的局域网地址，若浏览器拦截摄像头，请改用本机或 https 隧道；<br>
+        ③ 苹果框编号在前后帧间通过重合度保持稳定，用于“追踪几个苹果”；<br>
+        ④ 逐果定级每 3 秒自动执行一次，也可点“逐果定级”立即执行。
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+var rtStream = null, rtTimer = null, rtSeq = 0, rtTracks = [], rtTick = 0;
+var rtW = 0, rtH = 0;   // 服务端帧宽高（用于像素→比例换算）
+
+function iou(a, b) {
+  var ix1 = Math.max(a[0], b[0]), iy1 = Math.max(a[1], b[1]);
+  var ix2 = Math.min(a[2], b[2]), iy2 = Math.min(a[3], b[3]);
+  var iw = Math.max(0, ix2 - ix1), ih = Math.max(0, iy2 - iy1);
+  var inter = iw * ih, ua = (a[2]-a[0])*(a[3]-a[1]) + (b[2]-b[0])*(b[3]-b[1]) - inter;
+  return ua > 0 ? inter / ua : 0;
+}
+
+function rtStart() {
+  if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+    alert('浏览器不支持摄像头访问（需 HTTPS 或 localhost）'); return;
+  }
+  navigator.mediaDevices.getUserMedia({ video: { facingMode: 'environment', width: { ideal: 960 }, height: { ideal: 720 } }, audio: false })
+  .then(function(s) {
+    rtStream = s;
+    document.getElementById('rtVideo').srcObject = s;
+    document.getElementById('rtLive').textContent = '● 追踪中';
+    document.getElementById('rtStartBtn').innerHTML = '<i class="fas fa-play"></i> 追踪中';
+    document.getElementById('rtGradeWrap').classList.remove('d-none');
+    rtTick = 0;
+    rtTimer = setInterval(rtFrame, 1000);
+  }).catch(function(e) { alert('摄像头访问失败: ' + e.message); });
+}
+
+function rtStop() {
+  if (rtTimer) { clearInterval(rtTimer); rtTimer = null; }
+  if (rtStream) { rtStream.getTracks().forEach(function(t) { t.stop(); }); rtStream = null; }
+  document.getElementById('rtVideo').srcObject = null;
+  document.getElementById('rtLive').textContent = '● 未开启';
+  document.getElementById('rtStartBtn').innerHTML = '<i class="fas fa-play"></i> 开始追踪';
+  clearRtCanvas();
+}
+
+function snapshotBlob(cb) {
+  var video = document.getElementById('rtVideo');
+  if (!video.videoWidth) { alert('视频流尚未就绪'); return; }
+  var c = document.createElement('canvas');
+  c.width = video.videoWidth; c.height = video.videoHeight;
+  c.getContext('2d').drawImage(video, 0, 0);
+  c.toBlob(cb, 'image/jpeg', 0.8);
+}
+
+function serverToDisplay(nx, ny, onlyVideo) {
+  var video = document.getElementById('rtVideo');
+  var cw = video.clientWidth, ch = video.clientHeight;
+  if (!video.videoWidth) return { x: nx * cw, y: ny * ch };
+  var vw = video.videoWidth / video.videoHeight; // 视频宽高比
+  var aw = cw / ch;                               // 元素宽高比
+  var dw, dh, ox = 0, oy = 0;
+  if (vw > aw) { dw = cw; dh = cw / vw; oy = (ch - dh) / 2; }
+  else { dh = ch; dw = ch * vw; ox = (cw - dw) / 2; }
+  return { x: ox + nx * dw, y: oy + ny * dh };
+}
+
+function drawBoxes(boxes) {
+  var layer = document.getElementById('rtBoxLayer');
+  layer.innerHTML = '';
+  var video = document.getElementById('rtVideo');
+  if (!video.videoWidth) return;
+  rtTracks.forEach(function(t) {
+    var b = t.box;
+    // 服务端返回的是像素坐标，先归一化（除以帧宽高）
+    var p1 = serverToDisplay(b[0] / (rtW || 1), b[1] / (rtH || 1));
+    var p2 = serverToDisplay(b[2] / (rtW || 1), b[3] / (rtH || 1));
+    var div = document.createElement('div');
+    div.style.cssText = 'position:absolute;border:2px solid #00ff88;border-radius:4px;' +
+      'left:' + p1.x + 'px;top:' + p1.y + 'px;width:' + Math.max(2, p2.x - p1.x) + 'px;' +
+      'height:' + Math.max(2, p2.y - p1.y) + 'px;box-sizing:border-box;';
+    var lab = document.createElement('span');
+    lab.style.cssText = 'position:absolute;top:-17px;left:-2px;background:#00ff88;color:#06281c;' +
+      'font:bold 12px sans-serif;padding:1px 6px;border-radius:4px;white-space:nowrap;';
+    lab.textContent = '#' + t.id;
+    div.appendChild(lab);
+    layer.appendChild(div);
+  });
+}
+
+function clearRtCanvas() {
+  var layer = document.getElementById('rtBoxLayer');
+  if (layer) layer.innerHTML = '';
+}
+
+function updateTracks(serverBoxes) {
+  var missLimit = 2;            // 连续 N 帧没匹配到就删除该框（约 2~3 秒）
+  var used = new Array(rtTracks.length).fill(false);
+  // 1) 先匹配：新检测到 → 续用旧 id
+  serverBoxes.forEach(function(s) {
+    var bx = s.bbox;
+    var best = -1, bestIoU = 0.25;
+    rtTracks.forEach(function(t, ti) {
+      var v = iou(t.box, bx);
+      if (v > bestIoU) { bestIoU = v; best = ti; }
+    });
+    if (best >= 0) {
+      rtTracks[best].box = bx;
+      rtTracks[best].conf = s.conf;
+      rtTracks[best].miss = 0;
+      used[best] = true;
+    } else {
+      rtTracks.push({ id: ++rtSeq, box: bx, conf: s.conf, miss: 0 });
+      used.push(true);
+    }
+  });
+  // 2) 没被匹配到的旧框：丢失帧 +1，超限删除
+  var kept = [];
+  for (var i = 0; i < rtTracks.length; i++) {
+    if (!used[i]) {
+      rtTracks[i].miss = (rtTracks[i].miss || 0) + 1;
+      if (rtTracks[i].miss > missLimit) continue;
+    }
+    kept.push(rtTracks[i]);
+  }
+  rtTracks = kept;
+  // 3) 相邻太近的框（同一苹果被拆成多个）合并，只保留一个
+  var merged = [];
+  for (var a = 0; a < rtTracks.length; a++) {
+    var dup = false;
+    for (var b = 0; b < merged.length; b++) {
+      var ta = rtTracks[a].box, tb = merged[b].box;
+      var cxa = (ta[0] + ta[2]) / 2, cya = (ta[1] + ta[3]) / 2;
+      var cxb = (tb[0] + tb[2]) / 2, cyb = (tb[1] + tb[3]) / 2;
+      var insideA = ta[0] <= cxb && cxb <= ta[2] && ta[1] <= cyb && cyb <= ta[3];
+      var insideB = tb[0] <= cxa && cxa <= tb[2] && tb[1] <= cya && cya <= tb[3];
+      if (iou(ta, tb) > 0.25 && (insideA || insideB)) { dup = true; break; }
+    }
+    if (!dup) merged.push(rtTracks[a]);
+  }
+  rtTracks = merged;
+  document.getElementById('rtBadge').innerHTML = '<i class="fas fa-apple"></i> 苹果数：' + rtTracks.length;
+  drawBoxes();
+}
+
+function rtFrame() {
+  rtTick++;
+  snapshotBlob(function(blob) {
+    var fd = new FormData();
+    fd.append('file', blob, 'frame.jpg');
+    fetch('/api/frame', { method: 'POST', body: fd })
+    .then(function(r) { return r.json(); })
+    .then(function(d) {
+      if (d.error) return;
+      rtW = d.w || rtW; rtH = d.h || rtH;
+      updateTracks(d.boxes || []);
+      var auto = document.getElementById('rtAuto').checked;
+      if (auto && rtTick % 3 === 0) rtGradeNow();
+    }).catch(function() {});
+  });
+}
+
+function gradeHtml(d) {
+  var cls = function(g){ return g === '不合格' ? 'g-bad' : (g === '标准' ? 'g-std' : 'g-good'); };
+  var items = (d.apples || []).map(function(a) {
+    return '<span class="mini-chip ' + cls(a.grade) + '">#' + a.id + ' ' + a.grade +
+           ' · 占比 ' + (a.defect_ratio * 100).toFixed(1) + '% · ' + a.severity + '</span>';
+  }).join('');
+  var worst = d.worst ? d.worst.grade : '—';
+  return '<div style="margin-bottom:6px;"><span class="mini-chip ' + cls(worst) + '">整图判定：' + worst + '</span></div>' + items;
+}
+
+function rtGradeNow() {
+  var btn = document.getElementById('rtGradeBtn');
+  snapshotBlob(function(blob) {
+    var fd = new FormData();
+    fd.append('file', blob, 'grade.jpg');
+    btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> 定级中';
+    fetch('/api/multi_apple', { method: 'POST', body: fd })
+    .then(function(r) { return r.json(); })
+    .then(function(d) {
+      btn.innerHTML = '<i class="fas fa-microchip"></i> 逐果定级';
+      if (d.error) { document.getElementById('rtGradeList').innerHTML = '<span style="color:var(--danger);">' + d.error + '</span>'; return; }
+      document.getElementById('rtGradeList').innerHTML = gradeHtml(d);
+    }).catch(function(e) {
+      btn.innerHTML = '<i class="fas fa-microchip"></i> 逐果定级';
+      document.getElementById('rtGradeList').innerHTML = '<span style="color:var(--danger);">定级失败: ' + e.message + '</span>';
+    });
+  });
+}
+
+// ---------- 单图多果 ----------
+document.getElementById('rtFile').addEventListener('change', function(e) {
+  var f = e.target.files[0];
+  if (!f) return;
+  var url = URL.createObjectURL(f);
+  var img = document.getElementById('rtImg');
+  img.onload = function() { drawImageMulti(img, url, f); };
+  img.src = url;
+  document.getElementById('rtImgWrap').classList.remove('d-none');
+});
+
+function drawImageMulti(img, url, file) {
+  var fd = new FormData();
+  fd.append('file', file, 'multi.jpg');
+  var box = document.getElementById('rtImgList');
+  box.innerHTML = '<span style="color:var(--primary);"><i class="fas fa-spinner fa-spin"></i> 分析中…</span>';
+  fetch('/api/multi_apple', { method: 'POST', body: fd })
+  .then(function(r) { return r.json(); })
+  .then(function(d) {
+    if (d.error) { box.innerHTML = '<span style="color:var(--danger);">' + d.error + '</span>'; return; }
+    var cv = document.getElementById('rtImgOv');
+    var iw = img.clientWidth;
+    cv.width = iw * 2; cv.height = img.clientHeight * 2;
+    var ctx = cv.getContext('2d');
+    ctx.clearRect(0, 0, cv.width, cv.height);
+    ctx.save(); ctx.scale(2, 2);
+    var sx = iw / d.w, sy = img.clientHeight / d.h;
+    var colors = ['#00ff88','#00b8ff','#ffd166','#ff7b9c','#b388ff'];
+    (d.apples || []).forEach(function(a, i) {
+      var c = colors[i % colors.length];
+      var b = a.bbox;
+      ctx.strokeStyle = c; ctx.lineWidth = 2.5;
+      ctx.strokeRect(b[0] * sx, b[1] * sy, (b[2]-b[0]) * sx, (b[3]-b[1]) * sy);
+      var label = '#' + a.id + ' ' + a.grade + ' ' + (a.defect_ratio*100).toFixed(1) + '%';
+      ctx.font = '13px sans-serif';
+      var tw = ctx.measureText(label).width;
+      var y0 = Math.max(0, b[1]*sy - 18);
+      ctx.fillStyle = 'rgba(10,18,34,0.9)';
+      ctx.fillRect(b[0]*sx, y0, tw + 8, 18);
+      ctx.fillStyle = c;
+      ctx.fillText(label, b[0]*sx + 4, y0 + 13);
+    });
+    ctx.restore();
+    box.innerHTML = gradeHtml(d);
+  }).catch(function(e) { box.innerHTML = '<span style="color:var(--danger);">分析失败: ' + e.message + '</span>'; });
+}
+
+window.addEventListener('beforeunload', function() { rtStop(); });
+</script>
+{% endblock %}

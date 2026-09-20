@@ -1,0 +1,211 @@
+{% extends "base.html" %}
+{% block title %}{% if module == 'slice' %}切片·{% endif %}HACCP 品控视图{% endblock %}
+{% block content %}
+{% if module == 'slice' %}
+<div style="margin-bottom:10px;">
+  <h3 style="margin:0;font-size:18px;">切片·HACCP 品控</h3>
+  <div style="font-size:12px;color:var(--text-dim);margin-top:4px;">切片模块：针对鲜切苹果切片样本的 HACCP 品控记录</div>
+</div>
+{% endif %}
+<div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:10px;margin-bottom:14px;">
+  <div style="display:flex;gap:8px;align-items:center;">
+    <select id="haccpCat" class="pg-sel" onchange="haccpChange()">
+      {% if module == 'slice' %}<option value="apple_slice">🍎 苹果切片</option>
+      {% else %}<option value="apple">🍎 苹果</option>
+      <option value="bread">🍞 面包</option>
+      <option value="beverage">🥤 饮料</option>
+      {% endif %}
+    </select>
+    <input type="date" id="haccpDate" class="pg-sel" value="{{ today }}" onchange="haccpChange()">
+    <button class="btn btn-sm" style="border:1px solid var(--primary);color:var(--primary);background:rgba(0,212,255,0.08);" onclick="haccpChange()"><i class="fas fa-sync-alt"></i> 刷新</button>
+  </div>
+  <button class="btn btn-sm" style="border:1px solid var(--accent);color:var(--accent);background:rgba(0,255,136,0.08);" onclick="generateRecord()"><i class="fas fa-file-medical"></i> 生成质检记录单</button>
+</div>
+
+<div class="row g-3 mb-3">
+  <div class="col-6 col-lg-3"><div class="stat-card text-center"><div class="num" style="color:var(--primary);" id="hTotal">--</div><div class="lbl">当日检测</div></div></div>
+  <div class="col-6 col-lg-3"><div class="stat-card text-center"><div class="num" style="color:var(--accent);" id="hPass">--</div><div class="lbl">合格率</div></div></div>
+  <div class="col-6 col-lg-3"><div class="stat-card text-center"><div class="num" style="color:var(--danger);" id="hReject">--</div><div class="lbl">不合格</div></div></div>
+  <div class="col-6 col-lg-3"><div class="stat-card text-center"><div class="num" style="color:var(--warning);" id="hReview">--</div><div class="lbl">待复核</div></div></div>
+</div>
+
+<div class="row g-3">
+  <div class="col-lg-7">
+    <div class="glass-card p-3 mb-3">
+      <div style="font-size:13px;color:var(--text-dim);margin-bottom:14px;"><i class="fas fa-project-diagram"></i> 品控流程 · 关键控制点（CCP）监控</div>
+      <div id="haccpFlow" style="min-height:120px;"></div>
+    </div>
+    <div class="glass-card p-3">
+      <div style="font-size:13px;color:var(--text-dim);margin-bottom:12px;"><i class="fas fa-exclamation-triangle"></i> 危害分析（当日不合格分布）</div>
+      <div id="hazardBox" style="min-height:120px;"></div>
+    </div>
+  </div>
+  <div class="col-lg-5">
+    <div class="glass-card p-3" style="height:100%;">
+      <div style="font-size:13px;color:var(--text-dim);margin-bottom:12px;"><i class="fas fa-clipboard-list"></i> 质检记录单（HACCP 记录保持）</div>
+      <div id="recordList" style="max-height:520px;overflow-y:auto;"></div>
+    </div>
+  </div>
+</div>
+
+<style>
+.pg-sel { background:rgba(10,16,30,0.9); color:var(--text); border:1px solid var(--border); border-radius:8px; padding:5px 10px; font-size:12px; }
+.stat-card { padding: 18px 12px; border-radius: 12px; background: var(--bg-card); border: 1px solid var(--border); }
+.stat-card .num { font-size: 28px; font-weight: 700; font-family: 'Inter', monospace; }
+.stat-card .lbl { font-size: 12px; color: var(--text-dim); margin-top: 4px; }
+.ccp-node { flex:1; min-width:150px; background:rgba(10,16,30,0.6); border:1px solid var(--border); border-radius:12px; padding:12px; position:relative; }
+.ccp-node .ccp-badge { font-size:11px; font-weight:700; letter-spacing:1px; padding:2px 8px; border-radius:20px; display:inline-block; }
+.ccp-node .ccp-name { font-size:14px; font-weight:600; margin:8px 0 6px; }
+.ccp-node .ccp-meta { font-size:11px; color:var(--text-dim); line-height:1.7; }
+.ccp-arrow { display:flex; align-items:center; color:var(--text-dim); font-size:14px; padding:0 4px; }
+.rec-row { border:1px solid var(--border); border-radius:10px; padding:10px 12px; margin-bottom:8px; background:rgba(10,16,30,0.5); }
+.rec-row .rec-no { font-family:'Inter',monospace; font-weight:600; font-size:12px; color:var(--primary); }
+.rec-row .rec-meta { font-size:11px; color:var(--text-dim); margin-top:3px; }
+.rec-row .rec-concl { font-size:12px; margin-top:6px; }
+.hazard-item { display:flex; align-items:center; gap:10px; margin-bottom:10px; font-size:12px; }
+.hazard-bar-wrap { flex:1; background:rgba(10,16,30,0.7); border-radius:6px; height:14px; overflow:hidden; }
+.hazard-bar { height:100%; border-radius:6px; transition:width .5s; }
+.empty-tip { color:var(--text-dim); font-size:12px; text-align:center; padding:20px 0; }
+</style>
+
+<script>
+function todayStr() {
+  var d = new Date();
+  function p(n){ return (n < 10 ? '0' : '') + n; }
+  return d.getFullYear() + '-' + p(d.getMonth() + 1) + '-' + p(d.getDate());
+}
+var DEFCAT = "{{ default_category|default('') }}";
+var HACCP_CATEGORY = DEFCAT || 'apple';
+var HACCP_PERIOD = todayStr();
+
+function haccpChange() {
+  HACCP_CATEGORY = document.getElementById('haccpCat').value;
+  HACCP_PERIOD = document.getElementById('haccpDate').value || todayStr();
+  loadOverview();
+  loadRecords();
+}
+
+function statusBadge(s) {
+  var m = { ok:['正常','#00ff88','rgba(0,255,136,0.15)'],
+            warning:['关注','#ffc107','rgba(255,193,7,0.15)'],
+            danger:['超标','#ff4757','rgba(255,71,87,0.15)'],
+            pending:['待处理','#ffc107','rgba(255,193,7,0.15)'] };
+  var v = m[s] || m.ok;
+  return '<span class="ccp-badge" style="color:' + v[1] + ';background:' + v[2] + ';">' + v[0] + '</span>';
+}
+
+function renderFlow(flow, ccp) {
+  var el = document.getElementById('haccpFlow');
+  if (!flow || !flow.steps || !flow.steps.length) { el.innerHTML = '<div class="empty-tip">暂无流程配置</div>'; return; }
+  var html = '<div style="display:flex;align-items:stretch;overflow-x:auto;gap:0;">';
+  for (var i = 0; i < flow.steps.length; i++) {
+    if (i > 0) html += '<div class="ccp-arrow"><i class="fas fa-chevron-right"></i></div>';
+    var st = ccp && ccp[i] ? ccp[i] : {};
+    html += '<div class="ccp-node">'
+      + '<div>' + statusBadge(st.status || 'ok') + '</div>'
+      + '<div class="ccp-name">' + st.name + ' <span style="font-size:11px;color:var(--text-dim);">' + st.ccp + '</span></div>'
+      + '<div class="ccp-meta">危害：' + st.hazard + '</div>'
+      + '<div class="ccp-meta">限值：' + st.limit + '</div>'
+      + '<div class="ccp-meta">监控：' + st.monitor + '</div>'
+      + '<div class="ccp-meta" style="color:var(--accent);">纠偏：' + st.action + '</div>'
+      + '</div>';
+  }
+  html += '</div>';
+  el.innerHTML = html;
+}
+
+function renderStats(stats) {
+  document.getElementById('hTotal').textContent = stats.total;
+  document.getElementById('hPass').textContent = (stats.pass_rate * 100).toFixed(1) + '%';
+  document.getElementById('hReject').textContent = stats.reject;
+  document.getElementById('hReview').textContent = stats.review;
+}
+
+function renderHazards(hazards) {
+  var el = document.getElementById('hazardBox');
+  var max = 1;
+  for (var i = 0; i < hazards.length; i++) { if (hazards[i].count > max) max = hazards[i].count; }
+  var html = '';
+  if (!hazards.length || hazards.every(function(h){ return h.count === 0; })) {
+    html = '<div class="empty-tip">当日无不合格记录，危害水平正常</div>';
+  } else {
+    for (var j = 0; j < hazards.length; j++) {
+      var w = Math.round(hazards[j].count / max * 100);
+      html += '<div class="hazard-item">'
+        + '<div style="width:150px;">' + hazards[j].name + '</div>'
+        + '<div class="hazard-bar-wrap"><div class="hazard-bar" style="width:' + w + '%;background:' + hazards[j].color + ';"></div></div>'
+        + '<div style="font-family:monospace;font-weight:700;width:30px;text-align:right;">' + hazards[j].count + '</div>'
+        + '</div>';
+    }
+  }
+  el.innerHTML = html;
+}
+
+function loadOverview() {
+  fetch('/api/haccp/overview?category=' + HACCP_CATEGORY + '&period=' + HACCP_PERIOD)
+    .then(function(r){ return r.json(); })
+    .then(function(d){
+      renderStats(d.stats);
+      renderFlow(d.flow, d.ccp);
+      renderHazards(d.hazards);
+    })
+    .catch(function(){ document.getElementById('haccpFlow').innerHTML = '<div class="empty-tip">加载失败，请刷新重试</div>'; });
+}
+
+function renderRecords(list) {
+  var el = document.getElementById('recordList');
+  if (!list || !list.length) { el.innerHTML = '<div class="empty-tip">暂无质检记录单，点击右上角「生成质检记录单」</div>'; return; }
+  var html = '';
+  for (var i = 0; i < list.length; i++) {
+    var r = list[i];
+    var catName = {apple:'苹果', bread:'面包', beverage:'饮料', apple_slice:'苹果切片'}[r.category] || r.category;
+    var color = r.pass_rate >= 0.95 ? 'var(--accent)' : (r.pass_rate >= 0.85 ? 'var(--warning)' : 'var(--danger)');
+    html += '<div class="rec-row">'
+      + '<div style="display:flex;justify-content:space-between;align-items:center;">'
+      + '<span class="rec-no">' + r.record_no + '</span>'
+      + '<a href="/api/haccp/export/' + r.id + '" title="导出 Excel" style="color:var(--primary);"><i class="fas fa-download"></i></a>'
+      + '</div>'
+      + '<div class="rec-meta">' + catName + ' · ' + r.period + ' · 检测 ' + r.total + ' 件 · 操作员 ' + r.operator + '</div>'
+      + '<div class="rec-meta">合格率 <span style="color:' + color + ';font-weight:700;">' + (r.pass_rate * 100).toFixed(1) + '%</span> · 待复核 ' + r.review_count + '</div>'
+      + '<div class="rec-concl">' + r.conclusion + '</div>'
+      + '</div>';
+  }
+  el.innerHTML = html;
+}
+
+function loadRecords() {
+  fetch('/api/haccp/records?category=' + HACCP_CATEGORY)
+    .then(function(r){ return r.json(); })
+    .then(renderRecords)
+    .catch(function(){ document.getElementById('recordList').innerHTML = '<div class="empty-tip">记录加载失败</div>'; });
+}
+
+function generateRecord() {
+  if (!confirm('确认为所选品类生成当日质检记录单？')) return;
+  fetch('/api/haccp/generate', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ category: HACCP_CATEGORY, period: HACCP_PERIOD })
+  }).then(function(r){ return r.json(); }).then(function(d){
+    if (d.success) {
+      alert('已生成记录单：' + d.record.record_no);
+      loadRecords();
+      loadOverview();
+    } else {
+      alert(d.error || '生成失败');
+    }
+  }).catch(function(){ alert('生成失败，请检查服务是否运行'); });
+}
+
+(function init() {
+  document.getElementById('haccpDate').value = HACCP_PERIOD;
+  var saved = DEFCAT || localStorage.getItem('category') || 'apple';
+  if (document.getElementById('haccpCat').querySelector('[value="' + saved + '"]')) {
+    document.getElementById('haccpCat').value = saved;
+    HACCP_CATEGORY = saved;
+  }
+  loadOverview();
+  loadRecords();
+})();
+</script>
+{% endblock %}

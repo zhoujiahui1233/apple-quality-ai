@@ -1,5 +1,5 @@
 ﻿{% extends "base.html" %}
-{% block title %}数据集管理{% endblock %}
+{% block title %}{% if module == 'slice' %}切片·{% endif %}数据集管理{% endblock %}
 {% block content %}
 <style>
 .cat-card { padding: 16px; border-radius: 12px; background: var(--bg-card); border: 1px solid var(--border); margin-bottom: 16px; }
@@ -9,6 +9,8 @@
 .label-title { font-size: 13px; color: var(--accent); margin: 8px 0 6px; font-weight: 600; }
 .img-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(90px, 1fr)); gap: 8px; }
 .img-item { position: relative; }
+.img-sel { position: absolute; top: 4px; left: 4px; z-index: 3; width: 16px; height: 16px; cursor: pointer; accent-color: var(--danger); }
+.img-item.sel img { border-color: var(--danger); box-shadow: 0 0 8px rgba(255,71,87,0.55); }
 .img-grid img { width: 100%; aspect-ratio: 1; object-fit: cover; border-radius: 8px; border: 1px solid var(--border); cursor: pointer; transition: 0.3s; }
 .img-grid img:hover { border-color: var(--danger); transform: scale(1.05); }
 .img-del { position: absolute; top: 4px; right: 4px; width: 20px; height: 20px; border-radius: 50%; border: none; background: rgba(255,71,87,0.8); color: #fff; font-size: 10px; cursor: pointer; opacity: 0; transition: 0.3s; }
@@ -22,11 +24,15 @@
 
 <div class="d-flex justify-content-between align-items-center mb-3">
   <div style="display:flex;align-items:center;gap:12px;">
-    <h4 style="color:var(--text);font-weight:600;margin:0;"><i class="fas fa-database"></i> 数据集管理</h4>
+    <h4 style="color:var(--text);font-weight:600;margin:0;"><i class="fas fa-database"></i> {% if module == 'slice' %}切片·{% endif %}数据集管理</h4>
     <select id="pageCat" class="pg-sel" onchange="pageCatChange(this.value)">
+      {% if module == 'slice' %}
+      <option value="apple_slice">🍎 苹果切片</option>
+      {% else %}
       <option value="apple">🍎 苹果</option>
       <option value="bread">🍞 面包</option>
       <option value="beverage">🥤 饮料</option>
+      {% endif %}
     </select>
   </div>
   <span style="color:var(--text-dim);font-size:12px;" id="totalCount">加载中...</span>
@@ -37,6 +43,11 @@
 
 <div style="display:flex;gap:8px;margin-bottom:8px;flex-wrap:wrap;align-items:center;">
   <a href="/annotate" class="btn btn-sm" style="border:1px solid var(--primary);color:var(--primary);background:rgba(0,212,255,0.08);"><i class="fas fa-tags"></i> 去标注未分类图片</a>
+  <button class="btn btn-sm" style="border:1px solid var(--primary);color:var(--primary);background:rgba(0,212,255,0.08);" onclick="openBatchModal()"><i class="fas fa-file-import"></i> 批量导入（人工标注）</button>
+  <span style="width:1px;height:22px;background:var(--border);display:inline-block;"></span>
+  <label style="font-size:12px;color:var(--text-dim);cursor:pointer;margin:0;"><input type="checkbox" id="selAllChk" onchange="toggleSelAll(this.checked)" style="accent-color:var(--danger);"> 全选</label>
+  <button id="batchDelBtn" class="btn btn-sm" disabled style="border:1px solid var(--danger);color:var(--danger);background:rgba(255,71,87,0.08);" onclick="batchDeleteSel()"><i class="fas fa-trash-alt"></i> 批量删除 <span id="selCount">(0)</span></button>
+  {% if module != 'slice' %}
   <span style="color:var(--text-dim);font-size:12px;">模型训练：</span>
   <button class="btn btn-sm" style="border:1px solid var(--accent);color:var(--accent);background:rgba(0,255,136,0.06);" onclick="startRetrain()"><i class="fas fa-sync-alt"></i> SVM+RF 重训</button>
   <button class="btn btn-sm" style="border:1px solid var(--primary);color:var(--primary);background:rgba(0,212,255,0.08);" onclick="exportTrain('dl')"><i class="fas fa-upload"></i> 导出DL训练集</button>
@@ -44,17 +55,97 @@
   <button class="btn btn-sm" style="border:1px solid var(--warning);color:var(--warning);background:rgba(255,193,7,0.08);" onclick="exportTrain('yolo')"><i class="fas fa-upload"></i> 导出YOLO训练集</button>
   <button class="btn btn-sm" style="border:1px solid var(--warning);color:var(--warning);background:rgba(255,193,7,0.08);" onclick="startRetrainYOLO()"><i class="fas fa-crop-alt"></i> 重训YOLO</button>
   <span id="retrainState" style="color:var(--text-dim);font-size:12px;"></span>
+  {% endif %}
 </div>
+{% if module != 'slice' %}
 <div style="font-size:11px;color:var(--text-dim);margin:0 0 12px;line-height:1.7;">流程：先点“导出DL/YOLO训练集”（把收集的数据合并进对应训练集），数据量足够后再点“重训DL/YOLO”。YOLO 在 CPU 上训练较慢，会提示输入轮数，建议先用 3~5 轮测试。</div>
 <div id="retrainLog" style="display:none;background:rgba(10,16,30,0.9);border:1px solid var(--border);border-radius:10px;padding:10px 14px;font-size:12px;color:var(--accent);max-height:220px;overflow-y:auto;margin-bottom:14px;font-family:Consolas,monospace;white-space:pre-wrap;"></div>
+{% endif %}
 <div class="stat-row" id="statRow"></div>
 <div id="categoryContainer"></div>
+<style>
+.batch-item { position:relative; border:1px solid var(--border); border-radius:10px; overflow:hidden; background:rgba(10,16,30,0.6); }
+.batch-item img { width:100%; aspect-ratio:1; object-fit:cover; display:block; }
+.batch-opts { padding:6px; font-size:11px; color:var(--text); }
+.batch-opts label { display:inline-flex; align-items:center; gap:3px; margin-right:6px; cursor:pointer; }
+.batch-opts input { accent-color:var(--primary); }
+.batch-defect { width:100%; margin-top:5px; padding:3px; border-radius:6px; border:1px solid var(--border); background:rgba(0,0,0,0.6); color:var(--text); font-size:11px; }
+.batch-del { position:absolute; top:4px; right:4px; width:22px; height:22px; border-radius:50%; border:none; background:rgba(255,71,87,0.85); color:#fff; font-size:11px; cursor:pointer; }
+</style>
+<div id="batchModal" style="display:none;position:fixed;inset:0;z-index:2000;background:rgba(5,8,18,0.78);backdrop-filter:blur(4px);" onclick="if(event.target===this)closeBatchModal()">
+  <div style="position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);width:min(980px,94vw);max-height:88vh;overflow:auto;background:var(--bg-card);border:1px solid var(--primary);border-radius:14px;padding:18px;box-shadow:0 0 40px rgba(0,212,255,0.18);">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;">
+      <h5 style="color:var(--text);font-weight:600;margin:0;"><i class="fas fa-file-import" style="color:var(--primary);"></i> 批量导入（人工标注，不检测）</h5>
+      <button onclick="closeBatchModal()" style="background:none;border:none;color:var(--text-dim);font-size:18px;cursor:pointer;">✕</button>
+    </div>
+    <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin-bottom:10px;">
+      <span style="font-size:12px;color:var(--text-dim);">导入到品类:</span>
+      <select id="batchCat" class="pg-sel">{% if module == 'slice' %}<option value="apple_slice">🍎 苹果切片</option>{% else %}<option value="apple">🍎 苹果</option><option value="bread">🍞 面包</option><option value="beverage">🥤 饮料</option>{% endif %}</select>
+      <button class="btn btn-sm" style="border:1px solid var(--accent);color:var(--accent);background:rgba(0,255,136,0.06);" onclick="setAllBatch('合格')"><i class="fas fa-check-circle"></i> 全部合格</button>
+      <button class="btn btn-sm" style="border:1px solid var(--danger);color:var(--danger);background:rgba(255,71,87,0.06);" onclick="setAllBatch('不合格')"><i class="fas fa-times-circle"></i> 全部不合格</button>
+      <button class="btn btn-sm" style="border:1px solid var(--warning);color:var(--warning);background:rgba(255,193,7,0.08);" onclick="segmentBatch()" id="segBtn"><i class="fas fa-crop-alt"></i> 自动分割</button>
+      <label style="font-size:12px;color:var(--text-dim);cursor:pointer;margin:0;"><input type="checkbox" id="batchYoloOut" checked style="accent-color:var(--primary);"> 导出YOLO标注</label>
+      <span style="font-size:11px;color:var(--text-dim);" id="batchCount">已选 0 张</span>
+    </div>
+    <div style="display:flex;gap:14px;align-items:center;flex-wrap:wrap;margin-bottom:10px;font-size:12px;color:var(--text-dim);">
+      <label style="cursor:pointer;"><input type="checkbox" id="batchQc" checked style="accent-color:var(--primary);"> 质量检查（模糊/曝光异常）</label>
+      <label style="cursor:pointer;"><input type="checkbox" id="batchDup" checked style="accent-color:var(--primary);"> 去重检查（与数据集重复）</label>
+      <label style="cursor:pointer;"><input type="checkbox" id="batchForce" style="accent-color:var(--warning);"> 强制导入（跳过检查拦截）</label>
+    </div>
+    <div id="batchDrop" style="border:1.5px dashed var(--border);border-radius:10px;padding:18px;text-align:center;color:var(--text-dim);font-size:12px;cursor:pointer;margin-bottom:12px;" onclick="document.getElementById('batchFile').click()">
+      <i class="fas fa-cloud-upload-alt" style="font-size:22px;color:var(--primary);"></i>
+      <div style="margin-top:6px;">点击选择或拖拽多张图片到此处（jpg/png/bmp，单批 ≤60 张，总大小 ≤60MB）</div>
+      <div style="margin-top:4px;font-size:11px;">每张图可单独选择 合格 / 不合格；选“不合格”后可再选缺陷种类。点“自动分割”生成检测框（可点“←修正”单张重新拖动框选），确认导入时勾选“导出YOLO标注”可同时导出检测训练集</div>
+      <input type="file" id="batchFile" accept=".jpg,.jpeg,.png,.bmp,image/jpeg,image/png,image/bmp" multiple style="display:none;" onchange="onBatchFiles()">
+    </div>
+    <div id="batchGrid" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:10px;"></div>
+    <div style="text-align:right;margin-top:14px;">
+      <button class="btn btn-sm" style="border:1px solid var(--border);color:var(--text-dim);" onclick="closeBatchModal()">取消</button>
+      <button id="batchImportBtn2" class="btn btn-sm" style="border:1px solid var(--accent);color:var(--accent);background:rgba(0,255,136,0.12);margin-left:8px;" onclick="confirmBatchImport()"><i class="fas fa-save"></i> 确认导入</button>
+    </div>
+  </div>
+</div>
+
+
+<div id="editModal" style="display:none;position:fixed;inset:0;z-index:2100;background:rgba(5,8,18,0.82);backdrop-filter:blur(4px);" onclick="if(event.target===this)closeEditModal()">
+  <div style="position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);width:min(720px,94vw);max-height:92vh;overflow:auto;background:var(--bg-card);border:1px solid var(--warning);border-radius:14px;padding:16px;box-shadow:0 0 40px rgba(255,193,7,0.15);">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px;">
+      <h5 style="color:var(--text);font-weight:600;margin:0;"><i class="fas fa-crop-alt" style="color:var(--warning);"></i> <span id="editTitle">修正框选与标签</span></h5>
+      <button onclick="closeEditModal()" style="background:none;border:none;color:var(--text-dim);font-size:18px;cursor:pointer;">?</button>
+    </div>
+    <div style="position:relative;border:1px solid var(--border);border-radius:10px;overflow:hidden;background:#000;margin-bottom:10px;">
+      <canvas id="editCanvas" style="display:block;width:100%;touch-action:none;cursor:crosshair;"></canvas>
+      <div id="editHint" style="position:absolute;top:8px;left:50%;transform:translateX(-50%);background:rgba(0,0,0,0.72);color:var(--warning);padding:3px 12px;border-radius:8px;font-size:12px;pointer-events:none;white-space:nowrap;">拖动框选苹果区域</div>
+    </div>
+    <div style="display:flex;gap:12px;align-items:center;flex-wrap:wrap;font-size:12px;color:var(--text);margin-bottom:4px;">
+      <span style="color:var(--text-dim);">标签:</span>
+      <label style="cursor:pointer;margin:0;"><input type="radio" name="editLabel" value="合格" checked style="accent-color:var(--accent);" onchange="editLabelChange()"> 合格</label>
+      <label style="cursor:pointer;margin:0;"><input type="radio" name="editLabel" value="不合格" style="accent-color:var(--danger);" onchange="editLabelChange()"> 不合格</label>
+      <select id="editDefect" style="display:none;padding:4px 8px;border-radius:6px;border:1px solid var(--border);background:rgba(0,0,0,0.7);color:var(--text);font-size:12px;">
+        <option value="">缺陷类型</option>
+        <option value="碰伤">碰伤</option>
+        <option value="腐烂">腐烂</option>
+        <option value="虫眼">虫眼</option>
+        <option value="斑点">斑点</option>
+        <option value="畸形">畸形</option>
+        <option value="其他">其他</option>
+      </select>
+      <button class="btn btn-sm" style="border:1px solid var(--warning);color:var(--warning);background:rgba(255,193,7,0.1);margin-left:auto;" onclick="editRedo()"><i class="fas fa-redo"></i> 重新框选</button>
+    </div>
+    <div style="text-align:right;margin-top:10px;">
+      <button class="btn btn-sm" style="border:1px solid var(--border);color:var(--text-dim);" onclick="closeEditModal()">取消</button>
+      <button id="editOkBtn" class="btn btn-sm" style="border:1px solid var(--accent);color:var(--accent);background:rgba(0,255,136,0.12);margin-left:8px;" onclick="editSave()"><i class="fas fa-check"></i> 确认修正</button>
+    </div>
+  </div>
+</div>
 
 <script>
-var CAT_NAMES = {apple: "苹果", bread: "面包", beverage: "饮料"};
+var DEFCAT = "{{ default_category|default('') }}";
+function curCat() { return DEFCAT || (localStorage.getItem('category') || 'apple'); }
+var CAT_NAMES = {apple: "苹果", bread: "面包", beverage: "饮料", apple_slice: "苹果切片"};
 
 function loadDataset() {
-  var cat = localStorage.getItem('category') || 'apple';
+  var cat = curCat();
   document.getElementById("pageCat").value = cat;
   fetch("/api/dataset/list?category=" + cat)
     .then(function(r) { return r.json(); })
@@ -80,6 +171,7 @@ function loadDataset() {
       document.getElementById("statRow").innerHTML = statHtml;
 
       var html = "";
+      allShown = [];
       for (var i = 0; i < keys.length; i++) {
         var k = keys[i];
         var labels = cats[k] || {};
@@ -94,13 +186,21 @@ function loadDataset() {
           if (imgs.length === 0) continue;
           html += '<div class="label-group"><div class="label-title">' + lb + ' (' + imgs.length + ')</div><div class="img-grid">';
           for (var m = 0; m < imgs.length; m++) {
-            html += '<div class="img-item"><img src="/dataset_collected/' + k + '/' + lb + '/' + imgs[m] + '" loading="lazy">'+ '<button class="img-del" onclick="delImg(\'' + k + '\',\'' + lb + '\',\'' + imgs[m] + '\')">✕</button>'+ '<select class="img-move" onchange="moveImg(this, \'' + k + '\', \'' + lb + '\', \'' + imgs[m] + '\')">'+ '<option value="">改标签</option><option value="合格">→合格</option><option value="不合格">→不合格</option></select>' + '</div>';
+            allShown.push({cat: k, label: lb, fname: imgs[m]});
+            var _sel = isSel(k, lb, imgs[m]);
+            html += '<div class="img-item' + (_sel ? ' sel' : '') + '">'
+              + '<input type="checkbox" class="img-sel"' + (_sel ? ' checked' : '') + ' onchange="toggleSel(\'' + k + '\',\'' + lb + '\',\'' + imgs[m] + '\',this.checked)">'
+              + '<img src="/dataset_collected/' + k + '/' + lb + '/' + imgs[m] + '" loading="lazy">'
+              + '<button class="img-del" onclick="delImg(\'' + k + '\',\'' + lb + '\',\'' + imgs[m] + '\')">✕</button>'
+              + '<select class="img-move" onchange="moveImg(this, \'' + k + '\', \'' + lb + '\', \'' + imgs[m] + '\')">'
+              + '<option value="">改标签</option><option value="合格">→合格</option><option value="不合格">→不合格</option></select>'
+              + '</div>';
           }
           html += '</div></div>';
         }
         html += '</div>';
       }
-      if (html === "") html = '<div style="text-align:center;padding:40px;color:var(--text-dim);font-size:13px;">还没有收集数据，去检测页面保存图片到数据集吧</div>';
+      if (html === "") html = '<div style="text-align:center;padding:40px;color:var(--text-dim);font-size:13px;">{% if module == 'slice' %}切片·{% endif %}还没有收集数据，去检测页面保存图片到数据集吧</div>';
       document.getElementById("categoryContainer").innerHTML = html;
     });
 }
@@ -110,7 +210,7 @@ function moveImg(sel, cat, fromLabel, fname) {
   if (!to) return;
   if (!confirm('确认把该图片从「' + fromLabel + '」移动到「' + to + '」？')) { sel.value = ''; return; }
   var fd = new FormData();
-  fd.append('category', cat);
+  fd.append('category', DEFCAT || cat);
   fd.append('filename', fname);
   fd.append('from_label', fromLabel);
   fd.append('to_label', to);
@@ -121,10 +221,76 @@ function moveImg(sel, cat, fromLabel, fname) {
     });
 }
 
+var selMap = {};
+var allShown = [];
+function isSel(cat, label, fname) {
+  return !!(selMap[cat] && selMap[cat][label] && selMap[cat][label][fname]);
+}
+function toggleSel(cat, label, fname, checked) {
+  if (!selMap[cat]) selMap[cat] = {};
+  if (!selMap[cat][label]) selMap[cat][label] = {};
+  if (checked) selMap[cat][label][fname] = true;
+  else delete selMap[cat][label][fname];
+  updateSelUI();
+}
+function selCount() {
+  var n = 0;
+  for (var c in selMap) for (var l in selMap[c]) for (var f in selMap[c][l]) n++;
+  return n;
+}
+function updateSelUI() {
+  var n = selCount();
+  var btn = document.getElementById('batchDelBtn');
+  if (btn) btn.disabled = n === 0;
+  var s = document.getElementById('selCount');
+  if (s) s.textContent = '(' + n + ')';
+  var all = document.getElementById('selAllChk');
+  if (all && allShown.length) all.checked = n > 0 && n >= allShown.length;
+}
+function toggleSelAll(checked) {
+  for (var i = 0; i < allShown.length; i++) {
+    var it = allShown[i];
+    if (checked) {
+      if (!selMap[it.cat]) selMap[it.cat] = {};
+      if (!selMap[it.cat][it.label]) selMap[it.cat][it.label] = {};
+      selMap[it.cat][it.label][it.fname] = true;
+    } else {
+      if (selMap[it.cat] && selMap[it.cat][it.label]) delete selMap[it.cat][it.label][it.fname];
+    }
+  }
+  var cbs = document.querySelectorAll('.img-sel');
+  for (var j = 0; j < cbs.length; j++) cbs[j].checked = checked;
+  updateSelUI();
+}
+function batchDeleteSel() {
+  var items = [];
+  for (var c in selMap) for (var l in selMap[c]) for (var f in selMap[c][l])
+    items.push({category: c, label: l, filename: f});
+  if (!items.length) { alert('\u8bf7\u5148\u52fe\u9009\u8981\u5220\u9664\u7684\u56fe\u7247'); return; }
+  if (!confirm('\u786e\u8ba4\u5220\u9664\u5df2\u52fe\u9009\u7684 ' + items.length + ' \u5f20\u56fe\u7247\uff1f\u5c06\u540c\u6b65\u5220\u9664\u6570\u636e\u96c6\u6587\u4ef6\u5939\u4e2d\u7684\u5bf9\u5e94\u6587\u4ef6\uff0c\u4e0d\u53ef\u6062\u590d\uff01')) return;
+  var fd = new FormData();
+  fd.append('category', DEFCAT || items[0].category);
+  fd.append('items', JSON.stringify(items));
+  var btn = document.getElementById('batchDelBtn');
+  btn.disabled = true;
+  fetch('/api/dataset/batch_delete', { method: 'POST', body: fd })
+    .then(function(r) { return r.json(); })
+    .then(function(d) {
+      if (!d.success) { alert(d.error || '\u5220\u9664\u5931\u8d25'); updateSelUI(); return; }
+      var msg = '\u5df2\u5220\u9664 ' + d.deleted + ' \u5f20\u56fe\u7247\uff0c\u5e76\u540c\u6b65\u4ece\u6570\u636e\u96c6\u6587\u4ef6\u5939\u79fb\u9664\u5bf9\u5e94\u6587\u4ef6';
+      if (d.failed && d.failed.length) {
+        msg += '\n\u5931\u8d25 ' + d.failed.length + ' \u5f20\uff1a' + d.failed.slice(0, 5).map(function(x) { return x.filename + '\uff08' + x.reason + '\uff09'; }).join('\u3001');
+      }
+      alert(msg);
+      selMap = {};
+      loadDataset();
+    })
+    .catch(function(e) { alert('\u5220\u9664\u5931\u8d25: ' + e.message); updateSelUI(); });
+}
 function delImg(cat, label, fname) {
   if (!confirm("确认删除该图片？")) return;
   var fd = new FormData();
-  fd.append("category", cat);
+  fd.append("category", DEFCAT || cat);
   fd.append("label", label);
   fd.append("filename", fname);
   fetch("/api/dataset/delete", { method: "POST", body: fd })
@@ -133,24 +299,25 @@ function delImg(cat, label, fname) {
 }
 
 function pageCatChange(val) {
+  if (DEFCAT) return;
   localStorage.setItem('category', val);
   switchCategory(val);
 }
 
 function startRetrain() {
-  var cat = localStorage.getItem('category') || 'apple';
+  var cat = curCat();
   if (!confirm('确认对 ' + cat + ' 品类执行一键重训（SVM+RF）？将自动切分数据集、备份旧模型并登记新版本。')) return;
   runRetrain(cat, ['svm','rf'], 15);
 }
 function startRetrainDL() {
-  var cat = localStorage.getItem('category') || 'apple';
+  var cat = curCat();
   var ep = prompt('DL 训练轮数（默认 15）', '15');
   if (ep === null) return;
   ep = parseInt(ep, 10) || 15;
   runRetrain(cat, ['dl'], ep);
 }
 function startRetrainYOLO() {
-  var cat = localStorage.getItem('category') || 'apple';
+  var cat = curCat();
   var ep = prompt('YOLO 训练轮数（默认 30；CPU 训练较慢，建议先试 3~5 轮）', '30');
   if (ep === null) return;
   ep = parseInt(ep, 10) || 30;
@@ -166,7 +333,7 @@ function runRetrain(cat, models, epochs) {
     .catch(function(e){ alert('启动失败: ' + e); });
 }
 function exportTrain(model) {
-  var cat = localStorage.getItem('category') || 'apple';
+  var cat = curCat();
   var name = model === 'yolo' ? 'YOLO' : 'DL';
   if (!confirm('确认把当前品类的收集数据导出并合并到' + name + '训练集？')) return;
   fetch('/api/export/train', {method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({category: cat, model: model})})
@@ -195,6 +362,276 @@ function pollRetrain() {
     });
   }, 1500);
 }
+
+var batchItems = [];
+var DEFECT_TYPES = ["碰伤", "腐烂", "虫眼", "斑点", "畸形", "其他"];
+function openBatchModal() {
+  document.getElementById("batchCat").value = curCat();
+  document.getElementById("batchModal").style.display = "block";
+}
+function closeBatchModal() {
+  document.getElementById("batchModal").style.display = "none";
+  for (var i = 0; i < batchItems.length; i++) { if (batchItems[i].url) URL.revokeObjectURL(batchItems[i].url); }
+  batchItems = [];
+  document.getElementById("batchFile").value = "";
+  renderBatchGrid();
+}
+function assignBatchFiles(files) {
+  for (var i = 0; i < files.length; i++) {
+    var f = files[i];
+    if (!/\.(jpe?g|png|bmp)$/i.test(f.name) && !/^image\//i.test(f.type)) continue;
+    if (batchItems.length >= 60) { alert("单批最多 60 张"); break; }
+    batchItems.push({ file: f, url: URL.createObjectURL(f), label: "合格", defect: "", bbox: null, manual: false, preview: null, segDone: false });
+  }
+  renderBatchGrid();
+}
+function onBatchFiles() {
+  var input = document.getElementById("batchFile");
+  assignBatchFiles(Array.prototype.slice.call(input.files || []));
+  input.value = "";
+}
+function setAllBatch(label) {
+  for (var i = 0; i < batchItems.length; i++) { batchItems[i].label = label; batchItems[i].defect = ""; }
+  renderBatchGrid();
+}
+function removeBatchItem(idx) {
+  if (batchItems[idx] && batchItems[idx].url) URL.revokeObjectURL(batchItems[idx].url);
+  batchItems.splice(idx, 1);
+  renderBatchGrid();
+}
+function batchLabel(idx, el) { batchItems[idx].label = el.value; renderBatchGrid(); }
+function batchDefect(idx, val) { batchItems[idx].defect = val; }
+function renderBatchGrid() {
+  var box = document.getElementById("batchGrid");
+  var cnt = document.getElementById("batchCount");
+  if (cnt) cnt.textContent = "已选 " + batchItems.length + " 张";
+  if (!batchItems.length) {
+    box.innerHTML = '<div style="text-align:center;padding:24px;color:var(--text-dim);font-size:12px;">还没有选择图片，点击上方虚线框选择或直接拖拽图片进来</div>';
+    return;
+  }
+  var html = "";
+  for (var i = 0; i < batchItems.length; i++) {
+    var it = batchItems[i];
+    var defectOpts = '<option value="">缺陷类型</option>';
+    for (var j = 0; j < DEFECT_TYPES.length; j++) {
+      defectOpts += '<option value="' + DEFECT_TYPES[j] + '"' + (it.defect === DEFECT_TYPES[j] ? " selected" : "") + ">" + DEFECT_TYPES[j] + "</option>";
+    }
+    var src = it.preview || it.url;
+    var badge = '';
+    if (it.bbox) {
+      badge = it.manual
+        ? '<span style="position:absolute;top:4px;left:4px;background:rgba(167,139,250,0.92);color:#fff;font-size:10px;padding:1px 6px;border-radius:10px;z-index:2;">\u270e \u5df2\u4fee\u6b63</span>'
+        : '<span style="position:absolute;top:4px;left:4px;background:rgba(0,212,255,0.85);color:#fff;font-size:10px;padding:1px 6px;border-radius:10px;z-index:2;">\u2713 \u81ea\u52a8\u6846</span>';
+    } else if (it.segDone) {
+      badge = '<span style="position:absolute;top:4px;left:4px;background:rgba(255,193,7,0.92);color:#111;font-size:10px;padding:1px 6px;border-radius:10px;z-index:2;">\u26a0 \u672a\u68c0\u51fa</span>';
+    }
+    html += '<div class="batch-item">'
+      + '<div style="position:relative;">'
+      + '<img src="' + src + '" loading="lazy">'
+      + badge
+      + '<button class="batch-del" onclick="removeBatchItem(' + i + ')">✕</button>'
+      + '</div>'
+      + '<div class="batch-opts">'
+      + '<label><input type="radio" name="bl' + i + '" value="合格"' + (it.label === "合格" ? " checked" : "") + ' onchange="batchLabel(' + i + ', this)"> 合格</label>'
+      + '<label><input type="radio" name="bl' + i + '" value="不合格"' + (it.label === "不合格" ? " checked" : "") + ' onchange="batchLabel(' + i + ', this)"> 不合格</label>'
+      + '<select class="batch-defect" ' + (it.label === "不合格" ? "" : 'style="display:none"') + ' onchange="batchDefect(' + i + ',this.value)">' + defectOpts + '</select>'
+      + '</div>'
+      + '<div style="padding:0 6px 6px;display:flex;gap:6px;">'
+      + '<button style="flex:1;padding:4px;border-radius:6px;border:1px solid var(--warning);background:rgba(255,193,7,0.08);color:var(--warning);font-size:11px;cursor:pointer;" onclick="openEditModal(' + i + ')"><i class="fas fa-crop-alt"></i> \u4fee\u6b63</button>'
+      + '</div>'
+      + '</div>';
+  }
+  box.innerHTML = html;
+}
+function confirmBatchImport() {
+  if (!batchItems.length) { alert("请先选择图片"); return; }
+  var cat = document.getElementById("batchCat").value;
+  var fd = new FormData();
+  fd.append("category", DEFCAT || cat);
+  fd.append("quality_check", document.getElementById("batchQc").checked ? "1" : "0");
+  fd.append("dedup", document.getElementById("batchDup").checked ? "1" : "0");
+  fd.append("force", document.getElementById("batchForce").checked ? "1" : "0");
+  if (document.getElementById("batchYoloOut").checked) {
+    var _boxes = [];
+    for (var i = 0; i < batchItems.length; i++) { _boxes.push(batchItems[i].bbox || null); }
+    fd.append("boxes", JSON.stringify(_boxes));
+  }
+  for (var i = 0; i < batchItems.length; i++) {
+    fd.append("files", batchItems[i].file);
+    fd.append("labels", batchItems[i].label);
+    fd.append("defects", batchItems[i].defect || "");
+  }
+  var btn = document.getElementById("batchImportBtn2");
+  btn.disabled = true; btn.textContent = "导入中...";
+  fetch("/api/dataset/batch_import", { method: "POST", body: fd })
+    .then(function (r) { return r.json(); })
+    .then(function (d) {
+      btn.disabled = false; btn.textContent = "确认导入";
+      if (!d.success) { alert(d.error || "导入失败"); return; }
+      var errs = (d.results || []).filter(function (x) { return x.status === "error"; });
+      var msg = "导入完成：" + d.ok + "/" + d.total + " 张成功";
+      if (d.yolo_exported) { msg += "\n已导出 YOLO 检测标注 " + d.yolo_exported + " 张（可到重训YOLO进行训练）"; }
+      if (errs.length) {
+        msg += "\n失败 " + errs.length + " 张：" + errs.slice(0, 5).map(function (x) { return x.name + "（" + x.reason + "）"; }).join("、");
+      }
+      alert(msg);
+      if (d.ok > 0) { loadDataset(); }
+      if (!errs.length) closeBatchModal();
+    })
+    .catch(function (e) { btn.disabled = false; btn.textContent = "确认导入"; alert("导入失败: " + e); });
+}
+function segmentBatch() {
+  if (!batchItems.length) { alert('\u8bf7\u5148\u9009\u62e9\u56fe\u7247'); return; }
+  var files = [];
+  for (var i = 0; i < batchItems.length; i++) files.push(batchItems[i].file);
+  if (files.length > 60) { alert('\u5355\u6279\u6700\u591a 60 \u5f20'); return; }
+  var btn = document.getElementById('segBtn');
+  var orig = btn.innerHTML;
+  btn.disabled = true;
+  btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> \u5206\u5272\u4e2d...';
+  var fd = new FormData();
+  for (var j = 0; j < files.length; j++) fd.append('files', files[j]);
+  fetch('/api/import/segment', { method: 'POST', body: fd })
+    .then(function(r){ return r.json(); })
+    .then(function(d){
+      btn.disabled = false; btn.innerHTML = orig;
+      if (!d.success) { alert(d.error || '\u5206\u5272\u5931\u8d25'); return; }
+      var items = d.items || [];
+      for (var k = 0; k < items.length && k < batchItems.length; k++) {
+        batchItems[k].bbox = items[k].bbox || null;
+        batchItems[k].preview = items[k].preview || null;
+        batchItems[k].segDone = true;
+        batchItems[k].manual = false;
+      }
+      renderBatchGrid();
+      var n = items.filter(function(x){ return x.bbox; }).length;
+      alert('\u81ea\u52a8\u5206\u5272\u5b8c\u6210\uff1a' + n + '/' + items.length + ' \u5f20\u5df2\u751f\u6210\u68c0\u6d4b\u6846\uff0c\u672a\u68c0\u51fa\u7684\u53ef\u70b9\u300c\u4fee\u6b63\u300d\u624b\u52a8\u6846\u9009');
+    })
+    .catch(function(e){ btn.disabled = false; btn.innerHTML = orig; alert('\u5206\u5272\u5931\u8d25: ' + e.message); });
+}
+var editState = { idx: -1, img: null, rect: null, start: null, cw: 0, ch: 0 };
+function openEditModal(idx) {
+  var it = batchItems[idx];
+  if (!it) return;
+  editState.idx = idx;
+  document.getElementById('editTitle').textContent = '\u4fee\u6b63\uff1a' + it.file.name;
+  var rb = document.querySelector('input[name="editLabel"][value="' + it.label + '"]');
+  if (rb) rb.checked = true;
+  var dt = document.getElementById('editDefect');
+  dt.value = it.defect || '';
+  editLabelChange();
+  var c = document.getElementById('editCanvas');
+  var img = new Image();
+  img.onload = function() {
+    editState.img = img;
+    editState.iw = img.naturalWidth;
+    editState.ih = img.naturalHeight;
+    var w = Math.min(680, c.parentElement.clientWidth || 680);
+    var h = Math.round(w * editState.ih / editState.iw);
+    c.width = w; c.height = h;
+    editState.cw = w; editState.ch = h;
+    editState.rect = null; editState.start = null;
+    if (it.bbox) {
+      editState.rect = {
+        x: Math.round((it.bbox[0] - it.bbox[2] / 2) * w),
+        y: Math.round((it.bbox[1] - it.bbox[3] / 2) * h),
+        w: Math.round(it.bbox[2] * w),
+        h: Math.round(it.bbox[3] * h)
+      };
+    }
+    document.getElementById('editHint').style.display = 'block';
+    editDraw();
+    document.getElementById('editModal').style.display = 'block';
+  };
+  img.src = it.url;
+}
+function editDraw() {
+  var c = document.getElementById('editCanvas');
+  var ctx = c.getContext('2d');
+  ctx.clearRect(0, 0, c.width, c.height);
+  if (!editState.img) return;
+  ctx.drawImage(editState.img, 0, 0, c.width, c.height);
+  var r = editState.rect;
+  if (!r) return;
+  ctx.fillStyle = 'rgba(0,212,255,0.15)';
+  ctx.fillRect(r.x, r.y, r.w, r.h);
+  ctx.strokeStyle = '#00d4ff';
+  ctx.lineWidth = 2;
+  ctx.strokeRect(r.x, r.y, r.w, r.h);
+}
+function editPos(e) {
+  var c = document.getElementById('editCanvas');
+  var r = c.getBoundingClientRect();
+  var t = (e.touches && e.touches.length) ? e.touches[0] : ((e.changedTouches && e.changedTouches.length) ? e.changedTouches[0] : e);
+  return { x: (t.clientX - r.left) * (c.width / r.width), y: (t.clientY - r.top) * (c.height / r.height) };
+}
+function editDown(e) { e.preventDefault(); editState.start = editPos(e); editState.rect = null; editDraw(); }
+function editMove(e) { if (!editState.start) return; e.preventDefault(); var s = editState.start, p = editPos(e); editState.rect = {x: Math.min(s.x, p.x), y: Math.min(s.y, p.y), w: Math.abs(p.x - s.x), h: Math.abs(p.y - s.y)}; editDraw(); }
+function editUp(e) {
+  if (!editState.start) return; e.preventDefault();
+  var s = editState.start, p = editPos(e);
+  editState.start = null;
+  var w = Math.abs(p.x - s.x), h = Math.abs(p.y - s.y);
+  if (w < 10 || h < 10) { editState.rect = null; editDraw(); return; }
+  editState.rect = {x: Math.min(s.x, p.x), y: Math.min(s.y, p.y), w: w, h: h};
+  editDraw();
+}
+function editRedo() { editState.rect = null; editState.start = null; editDraw(); document.getElementById('editHint').style.display = 'block'; }
+function editLabelChange() {
+  var rb = document.querySelector('input[name="editLabel"]:checked');
+  document.getElementById('editDefect').style.display = (rb && rb.value === '\u4e0d\u5408\u683c') ? '' : 'none';
+}
+function editSave() {
+  if (editState.idx < 0) return;
+  var it = batchItems[editState.idx];
+  if (!it) return;
+  var rb = document.querySelector('input[name="editLabel"]:checked');
+  it.label = rb ? rb.value : '\u5408\u683c';
+  it.defect = document.getElementById('editDefect').value || '';
+  if (editState.rect && editState.cw && editState.ch) {
+    it.bbox = [
+      (editState.rect.x + editState.rect.w / 2) / editState.cw,
+      (editState.rect.y + editState.rect.h / 2) / editState.ch,
+      editState.rect.w / editState.cw,
+      editState.rect.h / editState.ch
+    ];
+    it.manual = true;
+    var c = document.getElementById('editCanvas');
+    it.preview = c.toDataURL('image/jpeg', 0.8);
+  } else if (it.bbox) {
+    it.bbox = null;
+    it.manual = false;
+    it.preview = null;
+  }
+  closeEditModal();
+  renderBatchGrid();
+}
+function closeEditModal() {
+  document.getElementById('editModal').style.display = 'none';
+  editState.idx = -1;
+}
+(function(){
+  var c = document.getElementById('editCanvas');
+  if (!c) return;
+  c.addEventListener('mousedown', editDown);
+  window.addEventListener('mousemove', editMove);
+  window.addEventListener('mouseup', editUp);
+  c.addEventListener('touchstart', editDown, {passive:false});
+  window.addEventListener('touchmove', editMove, {passive:false});
+  window.addEventListener('touchend', editUp, {passive:false});
+})();
+
+var batchDropZone = document.getElementById("batchDrop");
+if (batchDropZone) {
+  batchDropZone.addEventListener("dragover", function (e) { e.preventDefault(); batchDropZone.style.borderColor = "var(--primary)"; });
+  batchDropZone.addEventListener("dragleave", function () { batchDropZone.style.borderColor = ""; });
+  batchDropZone.addEventListener("drop", function (e) {
+    e.preventDefault();
+    batchDropZone.style.borderColor = "";
+    assignBatchFiles(Array.prototype.slice.call(e.dataTransfer.files || []));
+  });
+}
+
 
 loadDataset();
 </script>

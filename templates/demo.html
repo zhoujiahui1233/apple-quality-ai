@@ -1,0 +1,270 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<title>智果 · 快速检测演示</title>
+<style>@font-face{font-family:'Inter';src:url('/static/vendor/fonts/InterVariable.woff2') format('woff2');font-weight:100 900;font-display:swap;}</style>
+<link rel="stylesheet" href="/static/vendor/fontawesome/css/all.min.css">
+<style>
+:root {
+  --bg-dark: #0a0e1a;
+  --bg-card: rgba(18, 28, 50, 0.85);
+  --primary: #00d4ff;
+  --primary-dim: rgba(0, 212, 255, 0.15);
+  --accent: #00ff88;
+  --warning: #ffc107;
+  --danger: #ff4757;
+  --text: #e8edf5;
+  --text-dim: #8899bb;
+  --border: rgba(0, 212, 255, 0.18);
+  --glow: 0 0 20px rgba(0, 212, 255, 0.15);
+}
+* { margin: 0; padding: 0; box-sizing: border-box; }
+body {
+  font-family: 'Inter', -apple-system, 'Source Han Sans SC', 'Microsoft YaHei', sans-serif;
+  background: var(--bg-dark); color: var(--text); min-height: 100vh;
+}
+.bg-grid { position: fixed; inset: 0; z-index: 0; pointer-events: none;
+  background-image: linear-gradient(rgba(0,212,255,0.04) 1px, transparent 1px), linear-gradient(90deg, rgba(0,212,255,0.04) 1px, transparent 1px);
+  background-size: 40px 40px; }
+.wrap { position: relative; z-index: 1; max-width: 640px; margin: 0 auto; padding: 18px 14px 40px; }
+.header { display: flex; align-items: center; gap: 12px; padding: 10px 4px 16px; }
+.header i { font-size: 34px; color: var(--primary); text-shadow: var(--glow); }
+.header .t1 { font-size: 19px; font-weight: 700; background: linear-gradient(135deg, var(--primary), var(--accent)); -webkit-background-clip: text; -webkit-text-fill-color: transparent; }
+.header .t2 { font-size: 11px; color: var(--text-dim); margin-top: 2px; letter-spacing: 1px; }
+.card { background: var(--bg-card); border: 1px solid var(--border); border-radius: 14px; backdrop-filter: blur(16px); box-shadow: var(--glow); margin-bottom: 14px; overflow: hidden; }
+.upload-zone { min-height: 220px; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 10px; cursor: pointer; padding: 24px; text-align: center; transition: all .3s; }
+.upload-zone:hover, .upload-zone.drag { border-color: var(--primary) !important; background: var(--primary-dim) !important; }
+.upload-zone i { font-size: 42px; color: var(--primary-dim); }
+.upload-zone .u1 { font-size: 15px; color: var(--text); }
+.upload-zone .u2 { font-size: 12px; color: var(--text-dim); }
+.upload-zone .btns { display: flex; gap: 10px; margin-top: 6px; }
+.btn { padding: 9px 18px; border-radius: 10px; border: 1px solid var(--border); background: rgba(0,0,0,0.35); color: var(--text); font-size: 13px; cursor: pointer; display: inline-flex; align-items: center; gap: 6px; transition: all .3s; }
+.btn:hover { border-color: var(--primary); color: var(--primary); }
+.btn-primary { border-color: var(--primary); background: var(--primary-dim); color: var(--primary); }
+.btn-cam { border-color: var(--accent); background: rgba(0,255,136,0.12); color: var(--accent); }
+.status { padding: 8px 14px; font-size: 12px; color: var(--text-dim); border-bottom: 1px solid var(--border); }
+.status .spin { color: var(--primary); margin-right: 6px; }
+.status.err { color: var(--danger); }
+.img-box { position: relative; background: #000; min-height: 260px; display: flex; align-items: center; justify-content: center; }
+.img-box img { width: 100%; display: block; }
+.img-box .badge { position: absolute; top: 10px; left: 10px; background: rgba(0,0,0,0.7); padding: 4px 12px; border-radius: 8px; font-size: 12px; border: 1px solid var(--border); }
+.img-box .badge.good { border-color: var(--accent); color: var(--accent); }
+.img-box .badge.bad { border-color: var(--danger); color: var(--danger); }
+.img-box .badge.warn { border-color: var(--warning); color: var(--warning); }
+.stats { display: flex; gap: 8px; padding: 12px 14px; }
+.stat { flex: 1; text-align: center; background: rgba(0,212,255,0.04); border: 1px solid rgba(0,212,255,0.1); border-radius: 10px; padding: 10px 4px; }
+.stat .v { font-size: 17px; font-weight: 700; font-family: 'Inter', monospace; color: var(--primary); }
+.stat .l { font-size: 10px; color: var(--text-dim); margin-top: 3px; }
+.models { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; padding: 12px 14px; }
+.m-card { border: 1px solid var(--border); border-radius: 10px; padding: 10px; cursor: pointer; background: rgba(0,0,0,0.3); transition: all .3s; }
+.m-card:hover, .m-card.active { border-color: var(--primary); background: var(--primary-dim); }
+.m-card .m-name { font-size: 12px; color: var(--text-dim); font-weight: 600; display: flex; align-items: center; gap: 6px; }
+.m-card .m-name i { font-size: 10px; color: var(--accent); }
+.m-card .m-grade { font-size: 16px; font-weight: 700; margin-top: 6px; }
+.m-card .m-conf { font-size: 11px; color: var(--text-dim); margin-top: 3px; font-family: 'Inter', monospace; }
+.consensus { display: flex; align-items: center; gap: 8px; padding: 10px 14px; border-top: 1px solid var(--border); font-size: 12px; color: var(--text-dim); }
+.consensus b { color: var(--accent); }
+.hint { font-size: 11px; color: var(--text-dim); text-align: center; padding: 10px; }
+video { width: 100%; display: block; }
+#camBox { display: none; position: relative; }
+#camBox .cam-bar { position: absolute; bottom: 10px; left: 0; right: 0; display: flex; justify-content: center; gap: 10px; }
+#camBox .cam-bar .btn { background: rgba(0,0,0,0.7); }
+.hidden { display: none !important; }
+@media (max-width: 480px) {
+  .wrap { padding: 12px 10px 30px; }
+  .header i { font-size: 28px; }
+  .header .t1 { font-size: 16px; }
+  .stat .v { font-size: 15px; }
+}
+</style>
+</head>
+<body>
+<div class="bg-grid"></div>
+<div class="wrap">
+  <div class="header">
+    <i class="fas fa-apple-alt"></i>
+    <div>
+      <div class="t1">智果 · 快速检测演示</div>
+      <div class="t2">仅使用已训练模型 · 不上传不保存 · 临时演示版</div>
+    </div>
+  </div>
+
+  <div class="card">
+    <div id="uploadZone" class="upload-zone" style="border:2px dashed var(--border);">
+      <i class="fas fa-cloud-upload-alt"></i>
+      <div class="u1">点击上传或拖拽苹果图片</div>
+      <div class="u2">支持 JPG / PNG / BMP</div>
+      <div class="btns">
+        <button class="btn btn-cam" onclick="openCamera()"><i class="fas fa-camera"></i> 拍照</button>
+      </div>
+    </div>
+    <input type="file" id="fileInput" accept="image/*" style="display:none;">
+
+    <div id="camBox">
+      <video id="camVideo" autoplay playsinline muted></video>
+      <div class="cam-bar">
+        <button class="btn" onclick="closeCamera()"><i class="fas fa-times"></i> 关闭</button>
+        <button class="btn btn-primary" onclick="capture()"><i class="fas fa-camera"></i> 拍照检测</button>
+      </div>
+    </div>
+
+    <div id="statusBar" class="status hidden"></div>
+
+    <div class="img-box hidden" id="resultBox">
+      <img id="mainImg" alt="检测结果">
+      <div class="badge" id="gradeBadge">--</div>
+    </div>
+
+    <div id="statsRow" class="stats hidden"></div>
+    <div id="modelCards" class="models hidden"></div>
+    <div id="consensusRow" class="consensus hidden"></div>
+  </div>
+
+  <div class="hint">检测只在你的设备与这台电脑之间进行，图片不会被存入数据集。</div>
+</div>
+
+<script>
+var fileInput = document.getElementById('fileInput');
+var uploadZone = document.getElementById('uploadZone');
+var mainImg = document.getElementById('mainImg');
+var currentData = null;
+var activeViz = 'result';
+
+uploadZone.addEventListener('click', function(){ fileInput.click(); });
+['dragenter','dragover'].forEach(function(ev){ uploadZone.addEventListener(ev, function(e){ e.preventDefault(); uploadZone.classList.add('drag'); }); });
+['dragleave','drop'].forEach(function(ev){ uploadZone.addEventListener(ev, function(e){ e.preventDefault(); uploadZone.classList.remove('drag'); }); });
+uploadZone.addEventListener('drop', function(e){ if (e.dataTransfer.files.length) detectFile(e.dataTransfer.files[0]); });
+fileInput.addEventListener('change', function(){ if (fileInput.files.length) detectFile(fileInput.files[0]); });
+
+function status(msg, isErr) {
+  var s = document.getElementById('statusBar');
+  s.classList.remove('hidden');
+  s.className = 'status' + (isErr ? ' err' : '');
+  s.innerHTML = msg;
+}
+function detectFile(file) {
+  if (!file) return;
+  var fd = new FormData();
+  fd.append('file', file);
+  status('<i class="fas fa-spinner fa-spin spin"></i> 正在检测…');
+  fetch('/api/detect', { method: 'POST', body: fd })
+    .then(function(r){ return r.json().then(function(d){ return {ok: r.ok, d: d}; }); })
+    .then(function(t){
+      if (!t.ok || t.d.error) { status('<i class="fas fa-exclamation-triangle"></i> ' + (t.d.error || '检测失败'), true); return; }
+      showResult(t.d);
+    })
+    .catch(function(e){ status('<i class="fas fa-exclamation-triangle"></i> 检测失败: ' + e.message, true); });
+}
+
+function showResult(d) {
+  currentData = d;
+  activeViz = 'result';
+  document.getElementById('resultBox').classList.remove('hidden');
+  document.getElementById('statsRow').classList.remove('hidden');
+  document.getElementById('modelCards').classList.remove('hidden');
+  document.getElementById('consensusRow').classList.remove('hidden');
+  document.getElementById('uploadZone').style.display = 'none';
+  var badge = document.getElementById('gradeBadge');
+  var bad = d.grade_en === 'Reject';
+  badge.className = 'badge ' + (bad ? 'bad' : 'good');
+  badge.innerHTML = (bad ? '<i class="fas fa-exclamation-triangle"></i> ' : '<i class="fas fa-check-circle"></i> ') + d.grade;
+  status('<i class="fas fa-check-circle" style="color:var(--accent);"></i> 检测完成');
+  setMain(d.result_image, d.grade);
+  renderStats(d);
+  renderModels(d);
+  renderConsensus(d);
+}
+
+function setMain(src, grade) {
+  var badge = document.getElementById('gradeBadge');
+  var bad = grade && (grade.indexOf('Reject') >= 0 || grade.indexOf('\u4e0d\u5408\u683c') >= 0);
+  badge.className = 'badge ' + (bad ? 'bad' : 'good');
+  badge.innerHTML = (bad ? '<i class="fas fa-exclamation-triangle"></i> ' : '<i class="fas fa-check-circle"></i> ') + (grade || '--');
+  mainImg.src = src + '?t=' + Date.now();
+}
+
+function renderStats(d) {
+  var html = '';
+  [['缺陷数', d.defect_count + ' 处'], ['缺陷占比', d.defect_ratio], ['识别苹果', d.detect_count + ' 个']].forEach(function(p){
+    html += '<div class="stat"><div class="v">' + p[1] + '</div><div class="l">' + p[0] + '</div></div>';
+  });
+  document.getElementById('statsRow').innerHTML = html;
+}
+
+function renderModels(d) {
+  var names = { yolo: ['YOLO', 'fa-bolt'], dl: ['深度学习', 'fa-brain'], rf: ['随机森林', 'fa-tree'], svm: ['SVM', 'fa-chart-line'] };
+  var html = '';
+  Object.keys(names).forEach(function(k){
+    var m = d.models[k];
+    var bad = m.grade.indexOf('Reject') >= 0 || m.grade.indexOf('\u4e0d\u5408\u683c') >= 0;
+    var color = bad ? 'var(--danger)' : 'var(--accent)';
+    html += '<div class="m-card" onclick="showViz(\'' + k + '\')" id="mcard-' + k + '">' +
+      '<div class="m-name"><i class="fas ' + names[k][1] + '"></i> ' + names[k][0] + '</div>' +
+      '<div class="m-grade" style="color:' + color + '">' + m.grade + '</div>' +
+      '<div class="m-conf">' + (m.conf || '准确率 --') + '</div>' +
+      '</div>';
+  });
+  document.getElementById('modelCards').innerHTML = html;
+}
+
+function showViz(key) {
+  if (!currentData) return;
+  var target = key === 'detect' ? currentData.detect_image : currentData.models[key].image;
+  if (key === 'detect') { setMain(currentData.detect_image, currentData.grade); activeViz = 'detect'; }
+  else {
+    setMain(target, currentData.models[key].grade);
+    activeViz = key;
+  }
+  document.querySelectorAll('.m-card').forEach(function(c){ c.classList.remove('active'); });
+  var card = document.getElementById('mcard-' + (key === 'detect' ? 'yolo' : key));
+  if (card) card.classList.add('active');
+  status('<i class="fas fa-eye" style="color:var(--primary);"></i> 当前显示: ' + (key === 'detect' ? 'YOLO检测框' : ({yolo:'YOLO', dl:'深度学习', rf:'随机森林', svm:'SVM'}[key])));
+}
+
+function renderConsensus(d) {
+  var el = document.getElementById('consensusRow');
+  if (!d.consensus) { el.classList.add('hidden'); return; }
+  el.classList.remove('hidden');
+  var bad = d.consensus.grade.indexOf('Reject') >= 0 || d.consensus.grade.indexOf('\u4e0d\u5408\u683c') >= 0;
+  el.innerHTML = '<i class="fas fa-users"></i> 四模型多数表决: <b>' + d.consensus.grade + '</b> (' + d.consensus.votes + '/' + d.consensus.total + ' 个模型一致)' +
+    (bad ? ' <span style="color:var(--danger);">不合格</span>' : ' <span style="color:var(--accent);">合格</span>');
+}
+
+/* ===== 拍照 ===== */
+var camStream = null;
+function openCamera() {
+  var box = document.getElementById('camBox');
+  var video = document.getElementById('camVideo');
+  if (navigator.mediaDevices && navigator.mediaDevices.getUserMedia) {
+    navigator.mediaDevices.getUserMedia({ video: { facingMode: 'environment' }, audio: false })
+      .then(function(s){
+        camStream = s;
+        video.srcObject = s;
+        box.style.display = 'block';
+        video.play();
+      })
+      .catch(function(e){ alert('无法打开摄像头: ' + e.message); });
+  } else {
+    alert('当前浏览器不支持摄像头，请用上传图片');
+  }
+}
+function closeCamera() {
+  if (camStream) { camStream.getTracks().forEach(function(t){ t.stop(); }); camStream = null; }
+  document.getElementById('camBox').style.display = 'none';
+}
+function capture() {
+  var video = document.getElementById('camVideo');
+  if (!video.videoWidth) return;
+  var cv = document.createElement('canvas');
+  cv.width = video.videoWidth; cv.height = video.videoHeight;
+  cv.getContext('2d').drawImage(video, 0, 0);
+  cv.toBlob(function(blob){
+    closeCamera();
+    detectFile(new File([blob], 'capture.jpg', { type: 'image/jpeg' }));
+  }, 'image/jpeg', 0.92);
+}
+</script>
+</body>
+</html>

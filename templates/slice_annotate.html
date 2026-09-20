@@ -1,0 +1,340 @@
+{% extends "base.html" %}
+{% block title %}切片掩膜标注{% endblock %}
+{% block content %}
+<style>
+.mask-wrap { max-width: 1100px; margin: 0 auto; }
+.mask-head { display:flex; align-items:center; gap:14px; flex-wrap:wrap; margin-bottom:14px; }
+.mask-progress { flex:1; color:var(--text-dim); font-size:13px; }
+.mask-progress b { color:var(--primary); font-size:18px; }
+.mask-main { display:grid; grid-template-columns: 1fr 250px; gap:14px; }
+@media (max-width: 900px) { .mask-main { grid-template-columns: 1fr; } }
+.mask-canvas-box {
+  background:#000; border:1px solid var(--border); border-radius:14px; overflow:hidden;
+  display:flex; align-items:center; justify-content:center; min-height:380px;
+  position:relative; touch-action:none;
+}
+.mask-canvas-box canvas { max-width:100%; max-height:70vh; display:block; cursor:crosshair; }
+.mask-side { display:flex; flex-direction:column; gap:10px; }
+.mask-tools { background:rgba(12,20,38,0.75); border:1px solid var(--border); border-radius:12px; padding:12px; }
+.mask-tools h5 { margin:0 0 8px; font-size:12px; color:var(--text-dim); }
+.tool-row { display:flex; gap:6px; flex-wrap:wrap; }
+.tool-btn {
+  flex:1; min-width:64px; padding:8px 6px; border-radius:9px; border:1px solid var(--border);
+  background:rgba(10,16,30,0.8); color:var(--text); font-size:12px; cursor:pointer; transition:.15s;
+}
+.tool-btn .dot { display:inline-block; width:10px; height:10px; border-radius:50%; margin-right:4px; vertical-align:-1px; }
+.tool-btn.active { border-color:var(--primary); box-shadow:0 0 10px rgba(0,212,255,.35); transform:translateY(-1px); }
+.tool-btn .k { display:block; font-size:10px; color:var(--text-dim); margin-top:3px; }
+.mask-actions { display:flex; gap:8px; flex-wrap:wrap; }
+.mask-stats { background:rgba(12,20,38,0.75); border:1px solid var(--border); border-radius:12px; padding:12px; font-size:12px; }
+.mask-stats .row { display:flex; justify-content:space-between; padding:5px 0; border-bottom:1px solid rgba(255,255,255,0.06); }
+.mask-stats .row:last-child { border-bottom:none; }
+.mask-stats .row b { font-family:ui-monospace,Consolas,monospace; }
+.mask-empty { text-align:center; padding:80px 20px; color:var(--text-dim); }
+.mask-empty .big { font-size:48px; margin-bottom:12px; }
+.mask-tip { font-size:11px; color:var(--text-dim); line-height:1.8; margin:8px 0 0; }
+.legend { display:flex; gap:12px; flex-wrap:wrap; font-size:11px; color:var(--text-dim); margin-top:8px; }
+.legend .li { display:inline-flex; align-items:center; gap:5px; }
+.legend .sw { width:12px; height:12px; border-radius:3px; display:inline-block; }
+</style>
+
+<div class="mask-wrap">
+  <div class="mask-head">
+    <h4 style="color:var(--text);margin:0;"><i class="fas fa-edit"></i> 切片掩膜标注（人工修正伪标签）</h4>
+    <div class="mask-progress">剩余 <b id="maskRemain">--</b> 张 &nbsp;·&nbsp; 第 <b id="maskIdx">-</b>/<b id="maskTotal">-</b> 张</div>
+    <button class="btn-p btn-sm2" onclick="ingestPseudo()" title="把数据集里新增的切片照片生成伪标签"><i class="fas fa-magic"></i> 生成伪标签</button>
+    <a href="/dataset?module=slice" class="btn btn-sm2" style="border:1px solid var(--primary);color:var(--primary);background:rgba(0,212,255,0.08);"><i class="fas fa-database"></i> 查看数据集</a>
+  </div>
+
+  <div id="maskArea">
+    <div class="mask-empty">
+      <div class="big">📭</div>
+      <div id="maskEmptyText">没有待标注图片。先去切片检测页上传/拍摄切片照片并存入数据集，然后点「生成伪标签」。</div>
+    </div>
+  </div>
+</div>
+
+<script>
+var items = [];
+var idx = 0;
+var maskCanvas = null, maskCtx = null, dispCanvas = null, dispCtx = null;
+var imgEl = null;
+var curTool = 3;            // 1果肉 2果核 3褐变 4果皮 0橡皮
+var brushSize = 18;
+var undoStack = [];
+var painting = false;
+var TOOL_CLASS = {1:'果肉', 2:'果核', 3:'褐变', 4:'果皮', 0:'橡皮'};
+var CLASS_COLOR = {0:[0,0,0,0], 1:[0,255,136,110], 2:[0,212,255,120], 3:[255,71,87,150], 4:[255,170,60,130]};
+
+function loadQueue(first) {
+  fetch('/api/slice_annotate/queue').then(function(r){ return r.json(); }).then(function(d) {
+    items = d.items || [];
+    document.getElementById('maskRemain').textContent = d.count;
+    if (items.length === 0) {
+      document.getElementById('maskArea').innerHTML =
+        '<div class="mask-empty"><div class="big">🎉</div><div id="maskEmptyText">暂无图片。' +
+        (d.unmasked ? '有 ' + d.unmasked + ' 张图片还没有掩膜，点「生成伪标签」即可。' : '先到切片检测页存入切片照片。') + '</div></div>';
+      return;
+    }
+    if (first) idx = 0;
+    renderItem();
+  });
+}
+
+function renderItem() {
+  if (idx >= items.length) { loadQueue(true); return; }
+  var it = items[idx];
+  document.getElementById('maskRemain').textContent = items.length - idx;
+  document.getElementById('maskIdx').textContent = idx + 1;
+  document.getElementById('maskTotal').textContent = items.length;
+  document.getElementById('maskArea').innerHTML =
+    '<div style="margin-bottom:10px;font-size:12px;color:var(--text-dim);">' +
+      '<i class="fas fa-file-image"></i> ' + it.name +
+      (it.src ? ' &nbsp;来源: ' + it.src : '') +
+      (it.corrected ? ' &nbsp;<span style="color:var(--accent);"><i class="fas fa-check-circle"></i> 已修正</span>' : '') +
+    '</div>' +
+    '<div class="mask-main">' +
+      '<div class="mask-canvas-box"><canvas id="dispCanvas"></canvas></div>' +
+      '<div class="mask-side">' +
+        '<div class="mask-tools"><h5>涂刷工具</h5><div class="tool-row">' +
+          '<button class="tool-btn" onclick="setTool(1)"><span class="dot" style="background:#00ff88;"></span>果肉<span class="k">1</span></button>' +
+          '<button class="tool-btn" onclick="setTool(2)"><span class="dot" style="background:#00d4ff;"></span>果核<span class="k">2</span></button>' +
+          '<button class="tool-btn" onclick="setTool(3)"><span class="dot" style="background:#ff4757;"></span>褐变<span class="k">3</span></button>' +
+          '<button class="tool-btn" onclick="setTool(4)"><span class="dot" style="background:#ffaa3c;"></span>果皮<span class="k">4</span></button>' +
+          '<button class="tool-btn" onclick="setTool(0)"><span class="dot" style="background:#333;"></span>橡皮<span class="k">0</span></button>' +
+        '</div></div>' +
+        '<div class="mask-tools"><h5>笔刷大小 <b id="brushVal">' + brushSize + '</b></h5>' +
+          '<input type="range" min="3" max="70" value="' + brushSize + '" style="width:100%;accent-color:var(--primary);" oninput="brushSize=+this.value;document.getElementById(\'brushVal\').textContent=brushSize;">' +
+        '</div>' +
+        '<div class="mask-tools"><h5>操作</h5><div class="mask-actions">' +
+          '<button class="btn-a btn-sm2" onclick="saveMask()"><i class="fas fa-save"></i> 保存并下一张</button>' +
+          '<button class="btn-w btn-sm2" onclick="undo()"><i class="fas fa-undo"></i> 撤销</button>' +
+          '<button class="btn-p btn-sm2" onclick="resetMask()"><i class="fas fa-redo-alt"></i> 重新生成</button>' +
+          '<button class="btn btn-sm2" onclick="nextItem(false)"><i class="fas fa-forward"></i> 跳过</button>' +
+        '</div></div>' +
+        '<div class="mask-stats" id="maskStats"><div style="color:var(--text-dim);">计算中...</div></div>' +
+        '<div class="legend">' +
+          '<span class="li"><span class="sw" style="background:#00ff88;"></span>果肉</span>' +
+          '<span class="li"><span class="sw" style="background:#00d4ff;"></span>果核</span>' +
+          '<span class="li"><span class="sw" style="background:#ff4757;"></span>褐变</span>' +
+          '<span class="li"><span class="sw" style="background:#ffaa3c;"></span>果皮</span>' +
+        '</div>' +
+      '</div>' +
+    '</div>' +
+    '<p class="mask-tip">提示：左键按住涂刷，右键/长按拖动可快速擦除（等同橡皮）。快捷键 1~4 切换工具、0 橡皮、[ / ] 调笔刷、Ctrl+Z 撤销、Enter 保存。褐变只应标在果肉上，果核区不要标褐变。</p>';
+  initCanvas(it);
+}
+
+function setTool(t) {
+  curTool = t;
+  document.querySelectorAll('.tool-btn').forEach(function(b, i) {
+    b.classList.toggle('active', i === toolIndex(t));
+  });
+}
+function toolIndex(t) { return t === 0 ? 4 : t - 1; }
+
+function initCanvas(it) {
+  imgEl = new Image();
+  imgEl.crossOrigin = 'anonymous';
+  imgEl.onload = function() {
+    var maxDim = 900;
+    var scale = Math.min(1, maxDim / Math.max(imgEl.naturalWidth, imgEl.naturalHeight));
+    var w = Math.round(imgEl.naturalWidth * scale);
+    var h = Math.round(imgEl.naturalHeight * scale);
+    maskCanvas = document.createElement('canvas');
+    maskCanvas.width = w; maskCanvas.height = h;
+    maskCtx = maskCanvas.getContext('2d');
+    dispCanvas = document.getElementById('dispCanvas');
+    dispCanvas.width = w; dispCanvas.height = h;
+    dispCtx = dispCanvas.getContext('2d');
+    dispCtx.drawImage(imgEl, 0, 0, w, h);
+    bindCanvasEvents();
+    fetch('/api/slice_annotate/mask?name=' + encodeURIComponent(it.name))
+      .then(function(r){ return r.json(); })
+      .then(function(d) {
+        if (d.mask_data_url) loadMaskFromURL(d.mask_data_url);
+      })
+      .catch(function(e){ alert('掩膜加载失败: ' + e); });
+  };
+  imgEl.src = it.img_url;
+}
+
+function loadMaskFromURL(dataUrl) {
+  var im = new Image();
+  im.onload = function() {
+    maskCtx.clearRect(0, 0, maskCanvas.width, maskCanvas.height);
+    maskCtx.drawImage(im, 0, 0, maskCanvas.width, maskCanvas.height);
+    // 归一化：只保留 R 通道值 0~4，抹平 G/B 以便灰度 PNG 保存无损
+    var d = maskCtx.getImageData(0, 0, maskCanvas.width, maskCanvas.height);
+    for (var i = 0; i < d.data.length; i += 4) {
+      var c = d.data[i] & 7;                 // 灰度图三通道相同，取 R
+      if (c > 4) c = 0;
+      d.data[i] = c; d.data[i+1] = c; d.data[i+2] = c; d.data[i+3] = 255;
+    }
+    maskCtx.putImageData(d, 0, 0);
+    redraw();
+    computeStats();
+  };
+  im.src = dataUrl;
+}
+
+function bindCanvasEvents() {
+  dispCanvas.addEventListener('pointerdown', function(e) {
+    painting = true;
+    pushUndo();
+    paintAt(e);
+    dispCanvas.setPointerCapture(e.pointerId);
+  });
+  dispCanvas.addEventListener('pointermove', function(e) {
+    if (painting) paintAt(e);
+  });
+  dispCanvas.addEventListener('pointerup', function(e) {
+    if (painting) { painting = false; computeStats(); }
+  });
+  dispCanvas.addEventListener('pointerleave', function() {
+    if (painting) { painting = false; computeStats(); }
+  });
+}
+
+function canvasPos(e) {
+  var r = dispCanvas.getBoundingClientRect();
+  var x = (e.clientX - r.left) * dispCanvas.width / r.width;
+  var y = (e.clientY - r.top) * dispCanvas.height / r.height;
+  return {x: x, y: y};
+}
+
+function paintAt(e) {
+  if (e.button === 2) { paintCircle(e, 0); return; }  // 右键=橡皮
+  paintCircle(e, curTool);
+}
+
+function paintCircle(e, cls) {
+  var p = canvasPos(e);
+  var ctx = maskCtx;
+  ctx.fillStyle = 'rgb(' + cls + ',' + cls + ',' + cls + ')';
+  ctx.beginPath();
+  ctx.arc(p.x, p.y, brushSize / 2, 0, Math.PI * 2);
+  ctx.fill();
+  redraw();
+}
+
+function redraw() {
+  dispCtx.drawImage(imgEl, 0, 0, dispCanvas.width, dispCanvas.height);
+  var d = maskCtx.getImageData(0, 0, maskCanvas.width, maskCanvas.height);
+  var out = dispCtx.getImageData(0, 0, dispCanvas.width, dispCanvas.height);
+  var src = d.data, dst = out.data;
+  for (var i = 0; i < src.length; i += 4) {
+    var c = src[i];
+    if (c <= 0 || c > 4) continue;
+    var col = CLASS_COLOR[c];
+    dst[i]   = Math.round(dst[i]   * (1 - col[3]/255) + col[0] * col[3]/255);
+    dst[i+1] = Math.round(dst[i+1] * (1 - col[3]/255) + col[1] * col[3]/255);
+    dst[i+2] = Math.round(dst[i+2] * (1 - col[3]/255) + col[2] * col[3]/255);
+  }
+  dispCtx.putImageData(out, 0, 0);
+}
+
+function pushUndo() {
+  if (!maskCanvas) return;
+  undoStack.push(maskCtx.getImageData(0, 0, maskCanvas.width, maskCanvas.height));
+  if (undoStack.length > 20) undoStack.shift();
+}
+function undo() {
+  if (!undoStack.length) { alert('没有可撤销的操作'); return; }
+  maskCtx.putImageData(undoStack.pop(), 0, 0);
+  redraw();
+  computeStats();
+}
+
+function computeStats() {
+  var d = maskCtx.getImageData(0, 0, maskCanvas.width, maskCanvas.height);
+  var cnt = {0:0,1:0,2:0,3:0,4:0};
+  for (var i = 0; i < d.data.length; i += 4) {
+    var c = d.data[i];
+    if (c <= 4) cnt[c]++;
+  }
+  var flesh = cnt[1], brown = cnt[3];
+  var ratio = flesh > 0 ? (brown / flesh * 100) : 0;
+  var el = document.getElementById('maskStats');
+  if (!el) return;
+  el.innerHTML =
+    '<div class="row"><span>果肉像素</span><b>' + cnt[1] + '</b></div>' +
+    '<div class="row"><span>果核像素</span><b>' + cnt[2] + '</b></div>' +
+    '<div class="row"><span>褐变像素</span><b>' + cnt[3] + '</b></div>' +
+    '<div class="row"><span>果皮像素</span><b>' + cnt[4] + '</b></div>' +
+    '<div class="row"><span>褐变占比（褐变/果肉）</span><b style="color:var(--primary);">' + ratio.toFixed(1) + '%</b></div>';
+}
+
+function saveMask() {
+  if (!maskCanvas) return;
+  var dataUrl = maskCanvas.toDataURL('image/png');
+  var it = items[idx];
+  var btn = event && event.target ? event.target : null;
+  if (btn) btn.disabled = true;
+  fetch('/api/slice_annotate/save', {method:'POST', headers:{'Content-Type':'application/json'},
+    body: JSON.stringify({name: it.name, mask_data_url: dataUrl})})
+    .then(function(r){ return r.json(); })
+    .then(function(d) {
+      if (d.ok) nextItem(true);
+      else alert('保存失败: ' + (d.error || '未知错误'));
+    })
+    .catch(function(e){ alert('保存失败: ' + e); })
+    .then(function(){ if (btn) btn.disabled = false; });
+}
+
+function resetMask() {
+  if (!confirm('用规则算法重新生成这张图的掩膜（覆盖当前修改）？')) return;
+  var it = items[idx];
+  fetch('/api/slice_annotate/reset', {method:'POST', headers:{'Content-Type':'application/json'},
+    body: JSON.stringify({name: it.name})})
+    .then(function(r){ return r.json(); })
+    .then(function(d) {
+      if (!d.ok) { alert('重新生成失败: ' + (d.error || '')); return; }
+      fetch('/api/slice_annotate/mask?name=' + encodeURIComponent(it.name))
+        .then(function(r){ return r.json(); })
+        .then(function(x){ if (x.mask_data_url) { undoStack = []; loadMaskFromURL(x.mask_data_url); } });
+    })
+    .catch(function(e){ alert('重新生成失败: ' + e); });
+}
+
+function nextItem(saved) {
+  idx += 1;
+  renderItem();
+}
+
+function ingestPseudo() {
+  if (!confirm('为数据集里新增的切片照片生成伪标签（已有掩膜的不动）？')) return;
+  fetch('/api/slice_annotate/ingest', {method:'POST'})
+    .then(function(r){ return r.json(); })
+    .then(function(d) {
+      if (d.ok) {
+        alert('完成：新增 ' + d.added + ' 张，数据集现有 ' + d.total_in_dataset + ' 张（训练 ' + d.train + ' / 验证 ' + d.val + '）');
+        loadQueue(true);
+      } else alert('失败: ' + (d.error || ''));
+    })
+    .catch(function(e){ alert('失败: ' + e); });
+}
+
+document.addEventListener('keydown', function(e) {
+  if (e.target && (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA')) {
+    if (e.key === 'Enter' && e.target.tagName === 'INPUT') { saveMask(); }
+    return;
+  }
+  if (e.key === '1') setTool(1);
+  else if (e.key === '2') setTool(2);
+  else if (e.key === '3') setTool(3);
+  else if (e.key === '4') setTool(4);
+  else if (e.key === '0') setTool(0);
+  else if (e.key === '[') { brushSize = Math.max(3, brushSize - 3); }
+  else if (e.key === ']') { brushSize = Math.min(70, brushSize + 3); }
+  else if (e.key === 'Enter') saveMask();
+  else if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'z') { e.preventDefault(); undo(); }
+});
+// 禁止右键菜单干扰涂擦
+document.addEventListener('contextmenu', function(e) {
+  if (e.target && e.target.id === 'dispCanvas') e.preventDefault();
+});
+
+loadQueue(true);
+</script>
+{% endblock %}

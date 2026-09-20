@@ -1,8 +1,8 @@
 {% extends "base.html" %}
-{% block title %}标注检查{% endblock %}
+{% block title %}{% if module == 'slice' %}切片·标注预览{% else %}标注检查{% endif %}{% endblock %}
 {% block content %}
 <div class="d-flex justify-content-between align-items-center mb-3">
-  <h4>📐 YOLO 标注检查 (共 {{ count }} 张)</h4>
+  <h4>{% if module == 'slice' %}📐 切片·标注预览{% else %}📐 YOLO 标注检查{% endif %} (共 {{ count }} 张)</h4>
   <div>
     <a href="/" class="btn btn-success btn-sm">☁ 返回检测</a>
   </div>
@@ -20,6 +20,9 @@
     </div>
   </div>
 </div>
+{% if module == 'slice' %}
+<div class="card shadow-sm"><div class="card-body text-center text-muted" style="padding:40px;">切片模块暂无 YOLO 标注预览（切片标注将单独生成）。请返回外观模块查看整果标注。</div></div>
+{% else %}
 <div class="row" id="imageGrid">
 {% for img in images %}
   {% set fname = img.split('\\')[-1] %}
@@ -37,6 +40,7 @@
   </div>
 {% endfor %}
 </div>
+{% endif %}
 
 <!-- Lightbox -->
 <div id="fullLightbox" style="display:none;position:fixed;top:0;left:0;width:100%;height:100%;background:rgba(0,0,0,0.9);z-index:9999;text-align:center;cursor:pointer;" onclick="this.style.display='none'">

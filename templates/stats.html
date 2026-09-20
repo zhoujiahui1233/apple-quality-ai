@@ -1,17 +1,22 @@
 {% extends "base.html" %}
-{% block title %}数据统计{% endblock %}
+{% block title %}{% if module == 'slice' %}切片·{% endif %}数据统计{% endblock %}
 {% block content %}
+{% if module == 'slice' %}
+<h4 style="color:var(--text);margin:0 0 12px;"><i class="fas fa-cut" style="color:var(--primary);"></i> 切片·数据统计</h4>
+{% endif %}
 <div style="text-align:right;margin-bottom:12px;">
-  <select id="statCat" class="pg-sel" onchange="statCatChange(this.value)" style="margin-right:8px;">
+  <select id="statCat" class="pg-sel" onchange="statCatChange(this.value)" style="margin-right:8px;"{% if module == 'slice' %} disabled{% endif %}>
     <option value="">全部品类</option>
+    {% if module == 'slice' %}<option value="apple_slice" class="opt-slice">🍎 苹果切片</option>{% endif %}
     <option value="apple">🍎 苹果</option>
     <option value="bread">🍞 面包</option>
     <option value="beverage">🥤 饮料</option>
   </select>
-  <a href="/api/export/report" class="btn btn-sm" style="border:1px solid var(--primary);color:var(--primary);background:rgba(0,212,255,0.08);"><i class="fas fa-download"></i> 导出报告</a>
+  <a href="/api/export/report" class="btn-p btn-sm2"><i class="fas fa-download"></i> 导出报告</a>
 </div>
 <style>
 .pg-sel { background:rgba(10,16,30,0.9); color:var(--text); border:1px solid var(--border); border-radius:8px; padding:5px 10px; font-size:12px; }
+.opt-slice { color:var(--primary); font-weight:700; }
 </style>
 <style>
 .stat-card { padding: 20px; border-radius: 12px; background: var(--bg-card); border: 1px solid var(--border); }
@@ -63,20 +68,20 @@
 <div class="glass-card p-3 mt-3">
   <div style="font-size:13px;color:var(--text-dim);margin-bottom:12px;"><i class="fas fa-tasks"></i> 数据批量管理（按条件选中记录，可批量删除或改等级/品类）</div>
   <div style="display:flex;gap:10px;flex-wrap:wrap;align-items:center;font-size:12px;">
-    <select id="mgCat" class="mg-sel"><option value="">全部品类</option><option value="apple">🍎 苹果</option><option value="bread">🍞 面包</option><option value="beverage">🥤 饮料</option></select>
+    <select id="mgCat" class="mg-sel">{% if module == 'slice' %}<option value="apple_slice">🍎 苹果切片</option>{% else %}<option value="">全部品类</option><option value="apple">🍎 苹果</option><option value="bread">🍞 面包</option><option value="beverage">🥤 饮料</option>{% endif %}</select>
     <select id="mgGrade" class="mg-sel"><option value="">全部等级</option><option value="premium">优等</option><option value="standard">合格</option><option value="reject">不合格</option></select>
     <span style="color:var(--text-dim);">日期:</span>
     <input type="date" id="mgFrom" class="mg-sel">
     <span style="color:var(--text-dim);">至</span>
     <input type="date" id="mgTo" class="mg-sel">
-    <button class="btn btn-sm" style="border:1px solid var(--primary);color:var(--primary);background:rgba(0,212,255,0.08);" onclick="mgCount()"><i class="fas fa-search"></i> 查询数量</button>
+    <button class="btn-p btn-sm2" onclick="mgCount()"><i class="fas fa-search"></i> 查询数量</button>
     <span style="color:var(--text-dim);">匹配 <span id="mgCountNum" style="color:var(--accent);font-weight:700;">--</span> 条</span>
     <span style="flex:1;"></span>
     <select id="mgNewGrade" class="mg-sel"><option value="">改等级为…</option><option value="premium">优等</option><option value="standard">合格</option><option value="reject">不合格</option></select>
-    <button class="btn btn-sm" style="border:1px solid var(--accent);color:var(--accent);background:rgba(0,255,136,0.06);" onclick="mgUpdate('grade')">批量改等级</button>
-    <select id="mgNewCat" class="mg-sel"><option value="">改品类为…</option><option value="apple">苹果</option><option value="bread">面包</option><option value="beverage">饮料</option></select>
-    <button class="btn btn-sm" style="border:1px solid var(--warning);color:var(--warning);background:rgba(255,193,7,0.06);" onclick="mgUpdate('category')">批量改品类</button>
-    <button class="btn btn-sm btn-danger" onclick="mgDelete()"><i class="fas fa-trash"></i> 批量删除</button>
+    <button class="btn-a btn-sm2" onclick="mgUpdate('grade')">批量改等级</button>
+    <select id="mgNewCat" class="mg-sel">{% if module == 'slice' %}<option value="apple_slice">苹果切片</option>{% else %}<option value="">改品类为…</option><option value="apple">苹果</option><option value="bread">面包</option><option value="beverage">饮料</option>{% endif %}</select>
+    <button class="btn-w btn-sm2" onclick="mgUpdate('category')">批量改品类</button>
+    <button class="btn-d btn-sm2" onclick="mgDelete()"><i class="fas fa-trash"></i> 批量删除</button>
   </div>
 </div>
 <style>
@@ -86,7 +91,9 @@
 <script>
 var CUR_CAT = localStorage.getItem('category');
 if (CUR_CAT === null) CUR_CAT = 'apple';
-(function() { var mc = document.getElementById('mgCat'); if (mc && CUR_CAT) mc.value = CUR_CAT; })();
+var DEFCAT = "{{ default_category|default('') }}";
+var REQ_CAT = DEFCAT || CUR_CAT;
+(function() { var mc = document.getElementById('mgCat'); if (mc && REQ_CAT) mc.value = REQ_CAT; })();
 function mgFilter() {
   var f = {};
   var cat = document.getElementById('mgCat').value;
@@ -131,13 +138,14 @@ function mgUpdate(field) {
 </script>
 
 <script>
-document.getElementById('statCat').value = CUR_CAT;
+var statSel = document.getElementById('statCat');
+if (statSel) statSel.value = REQ_CAT;
 function statCatChange(val) {
   if (!val) { localStorage.setItem('category', ''); window.location.reload(); return; }
   localStorage.setItem('category', val);
   switchCategory(val);
 }
-fetch('/api/stats' + (CUR_CAT ? '?category=' + CUR_CAT : '')).then(function(r) { return r.json(); }).then(function(d) {
+fetch('/api/stats' + (REQ_CAT ? '?category=' + REQ_CAT : '')).then(function(r) { return r.json(); }).then(function(d) {
   var total = d.total || 0;
   document.getElementById('statTotal').textContent = total;
   document.getElementById('statPremium').textContent = total > 0 ? (d.premium / total * 100).toFixed(1) + '%' : '0%';
@@ -155,7 +163,7 @@ fetch('/api/stats' + (CUR_CAT ? '?category=' + CUR_CAT : '')).then(function(r) {
   });
 });
 
-fetch('/api/stats/daily?days=7' + (CUR_CAT ? '&category=' + CUR_CAT : '')).then(function(r) { return r.json(); }).then(function(data) {
+fetch('/api/stats/daily?days=7' + (REQ_CAT ? '&category=' + REQ_CAT : '')).then(function(r) { return r.json(); }).then(function(data) {
   var days = ['前6天','前5天','前4天','前3天','前2天','昨天','今天'];
   var labels = data.map(function(_, i) { return days[i] || '第' + (i+1) + '天'; });
   new Chart(document.getElementById('trendChart'), {
@@ -193,7 +201,7 @@ new Chart(document.getElementById('modelChart'), {
 });
 
 // Recent detections
-fetch('/api/stats' + (CUR_CAT ? '?category=' + CUR_CAT : '')).then(function(r) { return r.json(); }).then(function(d) {
+fetch('/api/stats' + (REQ_CAT ? '?category=' + REQ_CAT : '')).then(function(r) { return r.json(); }).then(function(d) {
     var log = document.getElementById('recentLog');
     log.innerHTML = '<div style="text-align:center;padding:12px;color:var(--text-dim);font-size:12px;">共 ' + (d.total || 0) + ' 次检测 | 优质率: ' + (d.total ? (d.premium/d.total*100).toFixed(1) : 0) + '%</div>';
   });

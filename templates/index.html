@@ -10,37 +10,81 @@
 .stream-status { position: absolute; bottom: 12px; left: 12px; background: rgba(0,0,0,0.6); padding: 4px 12px; border-radius: 6px; font-size: 11px; z-index: 2; }
 .dropzone { cursor: pointer; transition: all 0.3s; }
 .dropzone:hover { border-color: var(--primary) !important; background: rgba(0,212,255,0.05) !important; }
+#saveBarToggle, #quickSaveBtn { pointer-events: auto; }
+/* 卡片面板头/体 */
+.panel-head {
+  display: flex; align-items: center; justify-content: space-between; gap: 10px;
+  padding: 12px 16px; border-bottom: 1px solid var(--border);
+}
+.panel-head .t { display: flex; align-items: center; gap: 8px; font-size: 13px; font-weight: 600; color: var(--text); }
+.panel-head .t i { color: var(--primary); }
+.panel-body { padding: 14px 16px; }
+.action-bar { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
+.opt-row { display: flex; gap: 12px; flex-wrap: wrap; align-items: center; font-size: 12px; color: var(--text-dim); }
+.opt-row label { display: inline-flex; align-items: center; gap: 5px; cursor: pointer; margin: 0; }
+.opt-row input[type=checkbox], .opt-row input[type=radio] { accent-color: var(--primary); }
+@media (max-width: 768px) {
+  #saveToDatasetBar { max-height: 62%; overflow-y: auto; }
+  #saveToDatasetBar button { white-space: nowrap; }
+  .model-btn { padding: 4px 8px; font-size: 10px; }
+}
 </style>
 
 <div class="row g-3">
+  <!-- ============ 左：检测工作区 ============ -->
   <div class="col-lg-7">
-    <div class="glass-card p-0" style="overflow:hidden;">
+    <div class="glass-card" style="overflow:hidden;">
+      <div class="panel-head">
+        <span class="t"><i class="fas fa-crosshairs"></i> 检测工作区</span>
+        <span class="hint-text">拖拽 / 点击 / 拍照上传，实时 AI 检测</span>
+      </div>
       <div class="stream-area" id="streamContainer">
-        <div id="uploadZone" class="dropzone d-flex flex-column align-items-center justify-content-center" style="min-height:420px;">
+        <div id="uploadZone" class="dropzone d-flex flex-column align-items-center justify-content-center" onclick="document.getElementById('fileInput').click()" style="min-height:420px;">
           <i class="fas fa-cloud-upload-alt" style="font-size:48px;color:var(--primary-dim);margin-bottom:12px;"></i>
           <p style="color:var(--text-dim);font-size:14px;margin-bottom:4px;">拖拽或点击上传图片</p>
           <p style="color:var(--text-dim);font-size:11px;margin-bottom:16px;">支持 JPG / PNG / BMP</p>
-          <div style="display:flex;gap:12px;justify-content:center;">
-            <button class="btn btn-sm" style="border:1px solid var(--primary);color:var(--primary);background:rgba(0,212,255,0.08);" onclick="event.stopPropagation();document.getElementById('fileInput').click()"><i class="fas fa-folder-open"></i> 选择图片</button>
-            <button class="btn btn-sm" style="border:1px solid var(--accent);color:var(--accent);background:rgba(0,255,136,0.08);" onclick="event.stopPropagation();toggleCamera()" id="camBtn"><i class="fas fa-camera"></i> 摄像头</button>
+          <div class="action-bar" style="justify-content:center;">
+            <button class="btn-p btn-sm2" onclick="event.stopPropagation();document.getElementById('fileInput').click()"><i class="fas fa-folder-open"></i> 选择图片</button>
+            <button class="btn-p btn-sm2" onclick="event.stopPropagation();document.getElementById('fileInput').click()"><i class="fas fa-images"></i> 批量检测</button>
+            <button class="btn-a btn-sm2" onclick="event.stopPropagation();toggleCamera()" id="camBtn"><i class="fas fa-camera"></i> 摄像头</button>
           </div>
-          <input type="file" class="d-none" id="fileInput" accept="image/*">
+          <input type="file" class="d-none" id="fileInput" accept="image/*" multiple>
         </div>
         <div id="cameraContainer" class="d-none" style="position:relative;min-height:420px;background:#000;">
           <video id="videoFeed" autoplay playsinline style="width:100%;max-height:420px;object-fit:contain;"></video>
           <canvas id="photoCanvas" class="d-none"></canvas>
           <div style="position:absolute;bottom:12px;left:50%;transform:translateX(-50%);display:flex;gap:10px;z-index:2;">
-            <button class="btn btn-sm" style="border:1px solid var(--danger);color:#fff;background:rgba(255,71,87,0.3);" onclick="stopCamera()"><i class="fas fa-stop"></i> 关闭</button>
-            <button class="btn btn-sm" style="border:1px solid var(--accent);color:#fff;background:rgba(0,255,136,0.3);" onclick="captureAndDetect()"><i class="fas fa-camera"></i> 拍照检测</button>
-            <button class="btn btn-sm" style="border:1px solid var(--primary);color:#fff;background:rgba(0,212,255,0.3);" onclick="startContinuous()" id="contBtn"><i class="fas fa-sync-alt"></i> 连续</button>
+            <button class="btn-d btn-sm2" onclick="stopCamera()"><i class="fas fa-stop"></i> 关闭</button>
+            <button class="btn-a btn-sm2" onclick="captureAndDetect()"><i class="fas fa-camera"></i> 拍照检测</button>
+            <button class="btn-p btn-sm2" onclick="startContinuous()" id="contBtn"><i class="fas fa-sync-alt"></i> 连续</button>
+            <button class="btn-p btn-sm2" onclick="window.open('/realtime','_blank')"><i class="fas fa-video"></i> 多果追踪</button>
           </div>
         </div>
         <img id="resultImage" class="d-none" style="width:100%;min-height:420px;object-fit:contain;" alt="">
         <div id="cropHint" class="d-none" style="position:absolute;top:12px;left:50%;transform:translateX(-50%);z-index:6;background:rgba(0,0,0,0.72);color:var(--primary);padding:4px 16px;border-radius:8px;font-size:12px;pointer-events:none;white-space:nowrap;">拖动框选苹果区域</div>
-        <div id="cropActionBar" class="d-none" style="position:absolute;bottom:48px;left:50%;transform:translateX(-50%);z-index:6;display:flex;gap:8px;background:rgba(10,18,34,0.92);border:1px solid var(--primary);border-radius:10px;padding:6px 10px;">
-          <button onclick="cropRedetect()" style="padding:5px 12px;border-radius:8px;border:1px solid var(--accent);background:rgba(0,255,136,0.15);color:var(--accent);font-size:12px;cursor:pointer;">🔍 重检选区</button>
-          <button id="cropSaveBtn" onclick="cropSaveToDataset()" style="padding:5px 12px;border-radius:8px;border:1px solid var(--primary);background:rgba(0,212,255,0.15);color:var(--primary);font-size:12px;cursor:pointer;">💾 保存选区</button>
-          <button onclick="exitCropMode()" style="padding:5px 12px;border-radius:8px;border:1px solid var(--border);background:rgba(0,0,0,0.4);color:var(--text-dim);font-size:12px;cursor:pointer;">取消</button>
+        <div id="cropConfirmBar" class="d-none" style="position:absolute;bottom:48px;left:50%;transform:translateX(-50%);z-index:6;display:flex;gap:8px;align-items:center;background:rgba(10,18,34,0.95);border:1px solid var(--warning);border-radius:10px;padding:6px 10px;">
+          <span id="cropConfirmText" style="font-size:12px;color:var(--text);white-space:nowrap;"></span>
+          <button class="btn-w btn-sm2" onclick="cropRedoSelect()"><i class="fas fa-redo"></i> 重新框选</button>
+          <button id="cropConfirmOk" class="btn-a btn-sm2" onclick="cropConfirmOk()"><i class="fas fa-check"></i> 确认</button>
+        </div>
+        <div id="cropActionBar" class="d-none" style="position:absolute;bottom:48px;left:50%;transform:translateX(-50%);z-index:6;display:flex;flex-wrap:wrap;justify-content:center;gap:8px;max-width:96%;background:rgba(10,18,34,0.92);border:1px solid var(--primary);border-radius:10px;padding:6px 10px;">
+          <button class="btn-w btn-sm2" onclick="cropRedoSelect()"><i class="fas fa-redo"></i> 重新框选</button>
+          <button id="cropSaveBtn" class="btn-p btn-sm2" onclick="cropSaveToDataset()">💾 保存选区</button>
+          <span style="border-left:1px solid var(--border);padding-left:10px;display:flex;gap:6px;align-items:center;flex-wrap:wrap;">
+            <span style="font-size:11px;color:var(--text-dim);">标签</span>
+            <label style="font-size:12px;color:var(--text);cursor:pointer;margin:0;"><input type="radio" name="cropLabel" value="合格" checked style="accent-color:var(--accent);" onchange="onCropLabelChange()"> 合格</label>
+            <label style="font-size:12px;color:var(--text);cursor:pointer;margin:0;"><input type="radio" name="cropLabel" value="不合格" style="accent-color:var(--danger);" onchange="onCropLabelChange()"> 不合格</label>
+            <select id="cropDefectType" style="display:none;padding:4px 8px;border-radius:6px;border:1px solid var(--border);background:rgba(0,0,0,0.7);color:var(--text);font-size:12px;">
+              <option value="">缺陷类型</option>
+              <option value="碰伤">碰伤</option>
+              <option value="腐烂">腐烂</option>
+              <option value="虫眼">虫眼</option>
+              <option value="斑点">斑点</option>
+              <option value="畸形">畸形</option>
+              <option value="其他">其他</option>
+            </select>
+          </span>
+          <button class="btn-g btn-sm2" onclick="exitCropMode()">取消</button>
         </div>
         <div class="stream-overlay" style="position:absolute;inset:0;pointer-events:none;">
           <div class="stream-badge" id="streamBadge" style="pointer-events:none;"><i class="fas fa-circle" style="color:var(--danger);font-size:8px;"></i> LIVE · 等待上传</div>
@@ -51,71 +95,128 @@
             <div class="model-btn" onclick="switchModel('svm')">SVM</div>
           </div>
           <div class="stream-status" id="streamStatus"><i class="fas fa-arrow-circle-up"></i> 上传图片开始检测</div>
-                <div id="saveToDatasetBar" class="d-none" style="position:absolute;bottom:48px;left:12px;right:12px;z-index:3;pointer-events:auto;background:rgba(10,18,34,0.88);backdrop-filter:blur(12px);border:1px solid var(--border);border-radius:10px;padding:10px 12px;">
-          <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap;">
-            <span style="font-size:12px;color:var(--text-dim);">标签:</span>
-            <label style="font-size:12px;color:var(--text);cursor:pointer;"><input type="radio" name="dsLabel" value="合格" checked style="accent-color:var(--accent);" onchange="onDsLabelChange()"> 合格</label>
-            <label style="font-size:12px;color:var(--text);cursor:pointer;"><input type="radio" name="dsLabel" value="不合格" style="accent-color:var(--danger);" onchange="onDsLabelChange()"> 不合格</label>
-            <select id="defectType" style="display:none;padding:4px 8px;border-radius:6px;border:1px solid var(--border);background:rgba(0,0,0,0.7);color:var(--text);font-size:12px;">
-              <option value="">缺陷类型</option>
-              <option value="碰伤">碰伤</option>
-              <option value="腐烂">腐烂</option>
-              <option value="虫眼">虫眼</option>
-              <option value="斑点">斑点</option>
-              <option value="畸形">畸形</option>
-              <option value="其他">其他</option>
-            </select>
-            <button onclick="toggleSmartPanel()" style="padding:5px 10px;border-radius:8px;border:1px solid var(--primary);background:rgba(0,212,255,0.1);color:var(--primary);font-size:12px;cursor:pointer;"><i class="fas fa-sliders-h"></i> 智能选项</button>
-            <button onclick="smartPreview()" style="padding:5px 10px;border-radius:8px;border:1px solid var(--primary);background:rgba(0,212,255,0.15);color:var(--primary);font-size:12px;cursor:pointer;"><i class="fas fa-search"></i> 智能分析</button>
-            <button onclick="enterCropMode()" style="padding:5px 14px;border-radius:8px;border:1px solid var(--warning);background:rgba(255,193,7,0.12);color:var(--warning);font-size:12px;white-space:nowrap;cursor:pointer;"><i class="fas fa-crop-alt"></i> 框选重检</button>
-            <button onclick="saveToDataset()" style="padding:5px 14px;border-radius:8px;border:1px solid var(--accent);background:rgba(0,255,136,0.15);color:var(--accent);font-size:12px;white-space:nowrap;cursor:pointer;"><i class="fas fa-save"></i> 保存到数据集</button>
+          <button id="quickSaveBtn" class="d-none" onclick="quickSave()" style="pointer-events:auto;position:absolute;bottom:12px;right:12px;z-index:4;padding:8px 16px;border-radius:20px;border:1px solid var(--accent);background:rgba(0,255,136,0.18);color:var(--accent);font-size:13px;cursor:pointer;backdrop-filter:blur(8px);"><i class="fas fa-save"></i> 保存</button>
+          <button id="reviewBtn" class="d-none" onclick="location.href='/annotate'" style="pointer-events:auto;position:absolute;bottom:12px;right:100px;z-index:4;padding:8px 14px;border-radius:20px;border:1px solid var(--warning);background:rgba(255,193,7,0.16);color:var(--warning);font-size:13px;cursor:pointer;backdrop-filter:blur(8px);"><i class="fas fa-user-check"></i> 待复核</button>
+          <button id="saveBarToggle" class="d-none" onclick="toggleSaveBar()" style="pointer-events:auto;position:absolute;bottom:56px;right:12px;z-index:4;padding:8px 16px;border-radius:20px;border:1px solid var(--primary);background:rgba(0,212,255,0.15);color:var(--primary);font-size:13px;cursor:pointer;backdrop-filter:blur(8px);"><i class="fas fa-list-alt"></i> 展开</button>
+          <div id="saveToDatasetBar" class="d-none" style="position:absolute;bottom:48px;left:12px;right:12px;z-index:3;pointer-events:auto;background:rgba(10,18,34,0.88);backdrop-filter:blur(12px);border:1px solid var(--border);border-radius:10px;padding:10px 12px;">
+            <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px;">
+              <span style="font-size:12px;color:var(--text);font-weight:600;"><i class="fas fa-list-alt"></i> 检测结果 · 保存到数据集</span>
+              <button class="btn-g btn-sm2" onclick="toggleSaveBar()">收起 ▲</button>
+            </div>
+            <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap;">
+              <span style="font-size:12px;color:var(--text-dim);">标签:</span>
+              <label style="font-size:12px;color:var(--text);cursor:pointer;"><input type="radio" name="dsLabel" value="合格" checked style="accent-color:var(--accent);" onchange="onDsLabelChange()"> 合格</label>
+              <label style="font-size:12px;color:var(--text);cursor:pointer;"><input type="radio" name="dsLabel" value="不合格" style="accent-color:var(--danger);" onchange="onDsLabelChange()"> 不合格</label>
+              <select id="defectType" style="display:none;padding:4px 8px;border-radius:6px;border:1px solid var(--border);background:rgba(0,0,0,0.7);color:var(--text);font-size:12px;">
+                <option value="">缺陷类型</option>
+                <option value="碰伤">碰伤</option>
+                <option value="腐烂">腐烂</option>
+                <option value="虫眼">虫眼</option>
+                <option value="斑点">斑点</option>
+                <option value="畸形">畸形</option>
+                <option value="其他">其他</option>
+              </select>
+              <button class="btn-p btn-sm2" onclick="toggleSmartPanel()"><i class="fas fa-sliders-h"></i> 智能选项</button>
+              <button class="btn-p btn-sm2" onclick="smartPreview()"><i class="fas fa-search"></i> 智能分析</button>
+              <button class="btn-w btn-sm2" onclick="enterCropMode()"><i class="fas fa-crop-alt"></i> 框选重检</button>
+              <button class="btn-a btn-sm2" onclick="saveToDataset()"><i class="fas fa-save"></i> 保存到数据集</button>
+            </div>
           </div>
-                    <div style="font-size:11px;color:var(--text-dim);margin-top:6px;line-height:1.5;"><i class="fas fa-sync-alt"></i> 提示：保存前若手动修改了「合格/不合格」标签，保存后会同步修正本条历史记录的等级。</div>
-          <div id="smartPanel" style="display:none;margin-top:8px;padding-top:8px;border-top:1px solid var(--border);gap:14px;flex-wrap:wrap;font-size:12px;color:var(--text-dim);">
-            <label style="cursor:pointer;"><input type="checkbox" id="optCrop" checked style="accent-color:var(--primary);"> 自动裁剪主体(去背景)</label>
-            <label style="cursor:pointer;"><input type="checkbox" id="optQuality" checked style="accent-color:var(--primary);"> 质量检查(模糊/曝光)</label>
-            <label style="cursor:pointer;"><input type="checkbox" id="optDedup" checked style="accent-color:var(--primary);"> 去重检查</label>
-            <label style="cursor:pointer;"><input type="checkbox" id="optAugment" style="accent-color:var(--primary);"> 数据增强(1变4)</label>
-            <label style="cursor:pointer;"><input type="checkbox" id="optForce" style="accent-color:var(--danger);"> 强制保存</label>
-          </div>
-          <div id="smartResult" style="display:none;margin-top:8px;padding:8px 10px;border-radius:8px;background:rgba(0,0,0,0.4);font-size:12px;color:var(--text);line-height:1.8;"></div>
         </div>
+      </div>
+      <div class="panel-body">
+        <div class="action-bar">
+          <button class="btn-p btn-sm2" onclick="toggleSmartPanel()"><i class="fas fa-sliders-h"></i> 智能选项</button>
+          <button class="btn-p btn-sm2" onclick="smartPreview()"><i class="fas fa-search"></i> 智能分析</button>
+          <button class="btn-w btn-sm2" onclick="enterCropMode()"><i class="fas fa-crop-alt"></i> 框选重检</button>
+          <button class="btn-a btn-sm2" onclick="saveToDataset()"><i class="fas fa-save"></i> 保存到数据集</button>
+        </div>
+        <div style="margin-top:10px;display:flex;gap:8px;align-items:center;flex-wrap:wrap;">
+          <button class="btn-w btn-sm2" onclick="startMultiView()"><i class="fas fa-cubes"></i> 多角度检测（同一苹果多面）</button>
+          <span class="hint-text" style="font-size:11px;">同一苹果拍 2~8 张（正面/背面/侧面），任何一面有缺陷即判不合格</span>
+        </div>
+        <div id="multiViewPanel" style="display:none;margin-top:10px;padding:10px 12px;border:1px solid var(--border);border-radius:8px;background:rgba(0,0,0,0.25);">
+          <div id="multiStatus" style="font-size:13px;font-weight:600;margin-bottom:8px;"></div>
+          <div id="multiFaces"></div>
+        </div>
+        <div id="fusionInfo" style="display:none;margin-top:10px;padding:9px 12px;border:1px solid var(--primary);border-radius:8px;background:rgba(0,212,255,0.06);font-size:12px;"></div>
+        <div id="defectBlocksInfo" style="display:none;margin-top:10px;padding:9px 12px;border:1px solid var(--warning);border-radius:8px;background:rgba(255,193,7,0.05);font-size:12px;"></div>
+        <div class="hint-text" style="margin-top:8px;"><i class="fas fa-sync-alt"></i> 提示：保存前若手动修改了「合格/不合格」标签，保存后会同步修正本条历史记录的等级。</div>
+        <div id="smartPanel" style="display:none;margin-top:10px;padding-top:10px;border-top:1px solid var(--border);gap:14px;flex-wrap:wrap;font-size:12px;color:var(--text-dim);">
+          <label style="cursor:pointer;" title="勾选后会额外保存 1 张去背景裁剪图（共 2 张）"><input type="checkbox" id="optCrop" style="accent-color:var(--primary);"> 自动裁剪主体(去背景)（另存1张）</label>
+          <label style="cursor:pointer;"><input type="checkbox" id="optQuality" checked style="accent-color:var(--primary);"> 质量检查(模糊/曝光)</label>
+          <label style="cursor:pointer;"><input type="checkbox" id="optDedup" checked style="accent-color:var(--primary);"> 去重检查</label>
+          <label style="cursor:pointer;"><input type="checkbox" id="optAugment" style="accent-color:var(--primary);"> 数据增强(1变4)</label>
+          <label style="cursor:pointer;"><input type="checkbox" id="optForce" style="accent-color:var(--danger);"> 强制保存</label>
+        </div>
+        <div id="smartResult" style="display:none;margin-top:10px;padding:9px 12px;border-radius:8px;background:rgba(0,0,0,0.4);font-size:12px;color:var(--text);line-height:1.8;"></div>
+      </div>
+    </div>
+
+    <!-- ============ 批量检测 ============ -->
+    <div class="glass-card mt-3">
+      <div class="panel-head" onclick="toggleBatch()" style="cursor:pointer;">
+        <span class="t"><i class="fas fa-images"></i> 批量检测 <span id="batchCount" style="color:var(--primary);font-weight:600;"></span></span>
+        <span class="hint-text"><i class="fas fa-chevron-down" id="batchArrow"></i></span>
+      </div>
+      <div id="batchPanel" class="panel-body">
+        <div class="opt-row">
+          <label style="cursor:pointer;"><input type="checkbox" id="autoReviewCb" checked style="accent-color:var(--primary);"> 不确定结果自动进复核队列</label>
+          <label style="cursor:pointer;"><input type="checkbox" id="batchSaveGood" checked style="accent-color:var(--accent);"> 导出时存为合格样本</label>
+          <span style="flex:1;"></span>
+          <button id="batchYoloBtn" class="btn-p btn-sm2" onclick="exportBatchYolo()"><i class="fas fa-crop-alt"></i> 一键导出YOLO标注</button>
+          <button class="btn-p btn-sm2" onclick="document.getElementById('fileInput').click()"><i class="fas fa-folder-open"></i> 选择多张图片</button>
+        </div>
+        <div id="batchProgressWrap" class="d-none mt-2">
+          <div style="height:6px;background:rgba(0,212,255,0.1);border-radius:4px;overflow:hidden;"><div id="batchProgressBar" style="height:100%;width:0%;background:linear-gradient(90deg,var(--primary),var(--accent));transition:width .3s;"></div></div>
+          <div id="batchProgressText" style="font-size:12px;color:var(--text-dim);margin-top:6px;"></div>
+        </div>
+        <div id="batchTableWrap" class="d-none mt-2" style="max-height:260px;overflow-y:auto;">
+          <table class="table table-sm table-dark mb-0" style="font-size:12px;color:var(--text);">
+            <thead><tr><th>#</th><th>文件名</th><th>等级</th><th>严重度</th><th>复核</th><th>操作</th></tr></thead>
+            <tbody id="batchTableBody"></tbody>
+          </table>
         </div>
       </div>
     </div>
-    <div class="glass-card mt-3 p-3">
-      <div class="d-flex align-items-center justify-content-between" onclick="toggleTuning()" style="cursor:pointer;">
-        <span style="font-size:13px;color:var(--text-dim);"><i class="fas fa-sliders-h"></i> 参数调节 <span id="tuningArrow">▶</span></span>
+
+    <!-- ============ 参数调节 ============ -->
+    <div class="glass-card mt-3">
+      <div class="panel-head" onclick="toggleTuning()" style="cursor:pointer;">
+        <span class="t"><i class="fas fa-sliders-h"></i> 参数调节</span>
+        <span class="hint-text"><span id="tuningArrow">▶</span> 展开</span>
       </div>
-      <div id="tuningPanel" style="display:none;margin-top:12px;">
+      <div id="tuningPanel" class="panel-body" style="display:none;">
         <div class="row g-2">
           <div class="col-6"><label class="small text-muted">灵敏度: <strong id="sensVal">5</strong></label><input type="range" class="w-100" id="sensitivity" min="1" max="10" value="5" oninput="sensVal.textContent=this.value"></div>
           <div class="col-6"><label class="small text-muted">最小面积: <strong id="areaVal">200</strong></label><input type="range" class="w-100" id="minArea" min="50" max="500" value="200" step="10" oninput="areaVal.textContent=this.value"></div>
           <div class="col-6"><label class="small text-muted">优质阈值: <strong id="premVal">5.0</strong>%</label><input type="range" class="w-100" id="premiumTh" min="1" max="15" value="5" step="0.5" oninput="premVal.textContent=this.value"></div>
           <div class="col-6"><label class="small text-muted">合格阈值: <strong id="stdVal">15.0</strong>%</label><input type="range" class="w-100" id="standardTh" min="5" max="30" value="15" step="0.5" oninput="stdVal.textContent=this.value"></div>
+          <div class="col-12"><label style="font-size:12px;color:var(--text-dim);cursor:pointer;margin:0;"><input type="checkbox" id="wbCb" style="accent-color:var(--primary);"> 颜色校正（偏色/灯光偏黄时启用，检测前自动白平衡）</label></div>
         </div>
-        <button class="btn btn-sm mt-2" style="border:1px solid var(--border);color:var(--text-dim);" onclick="resetTuning()">恢复默认</button>
+        <button class="btn-g btn-sm2 mt-2" onclick="resetTuning()">恢复默认</button>
       </div>
     </div>
   </div>
 
+  <!-- ============ 右：数据看板 ============ -->
   <div class="col-lg-5">
     <div class="row g-3">
       <div class="col-6">
         <div class="glass-card p-3" style="height:100%;">
-          <div style="font-size:12px;color:var(--text-dim);margin-bottom:8px;"><i class="fas fa-chart-bar"></i> 模型准确率</div>
+          <div class="card-title"><i class="fas fa-chart-bar"></i> 模型准确率</div>
           <div class="chart-box"><canvas id="accChart"></canvas></div>
         </div>
       </div>
       <div class="col-6">
         <div class="glass-card p-3" style="height:100%;">
-          <div style="font-size:12px;color:var(--text-dim);margin-bottom:8px;"><i class="fas fa-chart-pie"></i> 品质分布</div>
+          <div class="card-title"><i class="fas fa-chart-pie"></i> 品质分布</div>
           <div class="chart-box-lg"><canvas id="donutChart"></canvas></div>
         </div>
       </div>
       <div class="col-6">
         <div class="glass-card p-3">
-          <div style="font-size:12px;color:var(--text-dim);margin-bottom:10px;"><i class="fas fa-microchip"></i> 模型性能</div>
+          <div class="card-title"><i class="fas fa-microchip"></i> 模型性能</div>
           <div class="row g-2">
             <div class="col-4"><div class="metric-card"><div class="value" id="metricLatency">--</div><div class="label">推理耗时</div></div></div>
             <div class="col-4"><div class="metric-card"><div class="value" id="metricMemory">--</div><div class="label">内存占用</div></div></div>
@@ -125,7 +226,7 @@
       </div>
       <div class="col-6">
         <div class="glass-card p-3">
-          <div style="font-size:12px;color:var(--text-dim);margin-bottom:8px;"><i class="fas fa-list"></i> 检测日志</div>
+          <div class="card-title"><i class="fas fa-list"></i> 检测日志</div>
           <div class="log-container" id="logContainer">
             <div style="text-align:center;padding:20px;color:var(--text-dim);font-size:12px;">等待检测...</div>
           </div>
@@ -138,7 +239,16 @@
 <div id="loadingOverlay" class="d-none" style="position:fixed;inset:0;z-index:9999;background:rgba(0,0,0,0.6);display:flex;align-items:center;justify-content:center;">
   <div class="text-center"><div class="spinner-border" style="color:var(--primary);width:3rem;height:3rem;"></div><p class="mt-3" style="color:var(--text-dim);">AI 分析中...</p></div>
 </div>
-
+<script>
+function toggleBatch() {
+  var p = document.getElementById('batchPanel');
+  var a = document.getElementById('batchArrow');
+  if (!p || !a) return;
+  var open = p.style.display !== 'none';
+  if (open) { p.style.display = 'none'; a.className = 'fas fa-chevron-right'; }
+  else { p.style.display = ''; a.className = 'fas fa-chevron-down'; }
+}
+</script>
 <script>
 function toggleTuning() {
   var p = document.getElementById('tuningPanel'), a = document.getElementById('tuningArrow');
@@ -262,22 +372,243 @@ function startContinuous() {
 // Upload
 document.addEventListener('DOMContentLoaded', function() {
   var fi = document.getElementById('fileInput');
-  if (fi) fi.addEventListener('change', function(e) { if (e.target.files.length > 0) up(e.target.files[0]); });
+  if (fi) fi.addEventListener('change', function(e) { var fs = e.target.files; if (fs.length > 1) uploadFiles(fs); else if (fs.length === 1) up(fs[0]); if (fi) fi.value = ''; });
   var dz = document.getElementById('uploadZone');
   if (dz) {
     dz.addEventListener('dragover', function(e) { e.preventDefault(); dz.style.borderColor = 'var(--primary)'; });
     dz.addEventListener('dragleave', function(e) { e.preventDefault(); dz.style.borderColor = ''; });
-    dz.addEventListener('drop', function(e) { e.preventDefault(); dz.style.borderColor = ''; if (e.dataTransfer.files.length > 0) up(e.dataTransfer.files[0]); });
+    dz.addEventListener('drop', function(e) { e.preventDefault(); dz.style.borderColor = ''; var fs = e.dataTransfer.files; if (fs.length > 1) uploadFiles(fs); else if (fs.length === 1) up(fs[0]); });
   }
 });
 
+var batchResults = [];
+function uploadFiles(fileList) {
+  var list = Array.prototype.slice.call(fileList || []).filter(function(f){ return f.type && f.type.indexOf('image/') === 0; });
+  if (list.length === 0) { alert('请选择图片文件'); return; }
+  batchResults = [];
+  var wrap = document.getElementById('batchProgressWrap');
+  var twrap = document.getElementById('batchTableWrap');
+  var body = document.getElementById('batchTableBody');
+  var bar = document.getElementById('batchProgressBar');
+  var txt = document.getElementById('batchProgressText');
+  if (wrap) wrap.classList.remove('d-none');
+  if (twrap) twrap.classList.remove('d-none');
+  if (body) body.innerHTML = '';
+  document.getElementById('batchCount').textContent = ' ' + list.length + ' 张';
+  var i = 0, okN = 0;
+  function step() {
+    if (i >= list.length) {
+      if (bar) bar.style.width = '100%';
+      if (txt) txt.textContent = '全部完成：共 ' + list.length + ' 张，成功 ' + okN + ' 张。';
+      return;
+    }
+    var f = list[i];
+    var row = document.createElement('tr');
+    row.id = 'brow-' + i;
+    row.innerHTML = '<td>' + (i + 1) + '</td><td style="max-width:150px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;" title="' + f.name + '">' + f.name + '</td><td colspan="4" style="color:var(--primary);"><i class="fas fa-spinner fa-spin"></i> 检测中...</td>';
+    if (body) body.appendChild(row);
+    if (bar) bar.style.width = (i / list.length * 100) + '%';
+    if (txt) txt.textContent = '正在检测 ' + (i + 1) + '/' + list.length + '：' + f.name;
+    up(f, true).then(function(d) {
+      var r = document.getElementById('brow-' + i);
+      if (d && !d.error) {
+        okN++;
+        var idx = batchResults.length;
+        batchResults.push({ name: f.name, data: d });
+        var sev = d.severity || '--';
+        var sevColor = sev === '重度' ? 'var(--danger)' : (sev === '中度' ? 'var(--warning)' : 'var(--accent)');
+        var rev = d.needs_review ? '<span style="color:var(--warning);"><i class="fas fa-user-check"></i> 待复核</span>' : '';
+        if (r) r.innerHTML = '<td>' + (i + 1) + '</td><td style="max-width:150px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;" title="' + f.name + '">' + f.name + '</td><td>' + (d.grade || '') + '</td><td style="color:' + sevColor + ';">' + sev + '</td><td>' + rev + '</td><td><a href="javascript:void(0)" onclick="viewBatchResult(' + idx + ')" style="color:var(--primary);">查看</a></td>';
+      } else {
+        if (r) r.innerHTML = '<td>' + (i + 1) + '</td><td style="max-width:150px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;" title="' + f.name + '">' + f.name + '</td><td colspan="4" style="color:var(--danger);">检测失败</td>';
+      }
+      i++;
+      step();
+    }).catch(function() {
+      var r = document.getElementById('brow-' + i);
+      if (r) r.innerHTML = '<td>' + (i + 1) + '</td><td>' + f.name + '</td><td colspan="4" style="color:var(--danger);">检测失败</td>';
+      i++;
+      step();
+    });
+  }
+  step();
+}
+function exportBatchYolo() {
+  var items = (batchResults || []).filter(function(it){ return it && it.data && it.data.original_image; });
+  if (!items.length) { alert('\u8bf7\u5148\u6279\u91cf\u68c0\u6d4b\u4e00\u6279\u56fe\u7247'); return; }
+  if (items.length > 60) { alert('\u5355\u6279\u6700\u591a 60 \u5f20\uff0c\u8bf7\u5206\u6279\u5bfc\u51fa'); return; }
+  if (!confirm('\u786e\u8ba4\u5c06\u5f53\u524d ' + items.length + ' \u5f20\u56fe\u7247\u4e00\u952e\u5bfc\u51fa\u4e3a YOLO \u68c0\u6d4b\u6807\u6ce8\uff1f\uff08\u81ea\u52a8\u5206\u5272\u751f\u6210\u6846\uff0c\u672a\u68c0\u6d4b\u51fa\u4e3b\u4f53\u7684\u5c06\u8df3\u8fc7\uff09')) return;
+  var btn = document.getElementById('batchYoloBtn');
+  var orig = btn.innerHTML;
+  btn.disabled = true;
+  btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> \u5bfc\u51fa\u4e2d ' + items.length + '\u5f20...';
+  var fd = new FormData();
+  fd.append('category', localStorage.getItem('category') || 'apple');
+  fd.append('save_good', document.getElementById('batchSaveGood').checked ? '1' : '0');
+  var chain = Promise.resolve();
+  items.forEach(function(it, idx) {
+    chain = chain.then(function() {
+      return fetch(it.data.original_image).then(function(r){ return r.blob(); }).then(function(blob) {
+        fd.append('files', blob, 'batch_' + idx + '.jpg');
+      });
+    });
+  });
+  chain.then(function() {
+    return fetch('/api/yolo/export_batch', { method: 'POST', body: fd });
+  }).then(function(r){ return r.json(); }).then(function(d) {
+    btn.disabled = false;
+    btn.innerHTML = orig;
+    if (d.success) {
+      var msg = '\u5bfc\u51fa ' + d.exported + ' \u5f20 YOLO \u6807\u6ce8';
+      if (d.skipped) msg += '\uff0c\u8df3\u8fc7 ' + d.skipped + ' \u5f20\uff08\u672a\u68c0\u6d4b\u51fa\u4e3b\u4f53\uff09';
+      if (d.saved_good) msg += '\uff0c\u540c\u65f6\u4fdd\u5b58\u5408\u683c\u6837\u672c ' + d.saved_good + ' \u5f20';
+      alert(msg);
+      btn.innerHTML = '<i class="fas fa-check"></i> ' + msg;
+      setTimeout(function(){ btn.innerHTML = orig; }, 4000);
+    } else { alert(d.error || '\u5bfc\u51fa\u5931\u8d25'); }
+  }).catch(function(e) {
+    btn.disabled = false;
+    btn.innerHTML = orig;
+    alert('\u5bfc\u51fa\u5931\u8d25: ' + e.message);
+  });
+}
+function viewBatchResult(idx) {
+  var item = batchResults[idx];
+  if (item && item.data) renderResult(item.data);
+}
 var logCount = 0;
-function up(f) {
+function renderResult(d) {
+  window.lastDetectData = d;
+  window.dsLabelEdited = false;
+  var _g = d.grade || '';
+  var _isBad = _g.indexOf('Reject') >= 0 || _g.indexOf('不合格') >= 0;
+  var _rb = document.querySelector('input[name="dsLabel"][value="' + (_isBad ? '不合格' : '合格') + '"]');
+  if (_rb) _rb.checked = true;
+  if (typeof updateDefectType === 'function') { updateDefectType(); }
+  var img = document.getElementById('resultImage');
+  img.src = d.result_image + '?t=' + Date.now();
+  img.classList.remove('d-none');
+  document.getElementById('uploadZone').classList.add('d-none');
+  var sev = d.severity || '';
+  var sevColor = sev === '重度' ? 'var(--danger)' : (sev === '中度' ? 'var(--warning)' : 'var(--accent)');
+  var statusHtml = '<i class="fas fa-check-circle" style="color:var(--accent);"></i> 检测完成';
+  if (sev) statusHtml += ' · <b style="color:' + sevColor + ';">' + sev + '</b>';
+  if (d.needs_review) statusHtml += ' · <span style="color:var(--warning);"><i class="fas fa-user-check"></i> 待复核</span>';
+  document.getElementById('streamStatus').innerHTML = statusHtml;
+  var _fi = document.getElementById('fusionInfo');
+  if (_fi) {
+    if (d.fusion_grade) {
+      var fOk = d.fusion_grade.indexOf('Premium') >= 0;
+      var fColor = fOk ? 'var(--accent)' : 'var(--danger)';
+      var fHtml = '<div style="color:var(--primary);font-weight:600;"><i class="fas fa-project-diagram"></i> 综合判定（多模型加权融合 + 缺陷先验，参考论文多模型融合方法）</div>' +
+        '<div style="margin-top:5px;"><span style="color:' + fColor + ';font-weight:700;font-size:14px;">' + (fOk ? '合格' : '不合格') + '</span>' +
+        ' <span style="color:var(--text-dim);">置信度 ' + (parseFloat(d.fusion_conf) * 100).toFixed(1) + '% · 融合得分 ' + parseFloat(d.fusion_score).toFixed(2) + '</span></div>' +
+        '<div style="color:var(--text-dim);margin-top:5px;line-height:1.7;font-size:11px;">' + (d.fusion_votes || '') + '</div>';
+      if (d.diameter_px) {
+        fHtml += '<div style="color:var(--text-dim);margin-top:5px;font-size:11px;"><i class="fas fa-ruler"></i> 果径参考：' + d.diameter_px + 'px（占图宽 ' + (parseFloat(d.diameter_norm) * 100).toFixed(0) + '%）· 长宽比 ' + d.diameter_aspect + '（GB/T10651-2008 果径分级需物理标定后启用）</div>';
+      }
+      _fi.innerHTML = fHtml;
+      _fi.style.display = '';
+    } else {
+      _fi.style.display = 'none';
+    }
+  }
+  var _dbi = document.getElementById('defectBlocksInfo');
+  if (_dbi) {
+    if (d.defect_blocks && d.defect_blocks.length) {
+      var typeOpts = ['碰伤','腐烂','虫眼','斑点','畸形','果萼果梗','其他'];
+      var rows = d.defect_blocks.map(function(b){
+        var sel = '<select onchange="saveDefectBlockType(' + b.index + ', this.value)" style="padding:3px 6px;border-radius:6px;border:1px solid var(--border);background:rgba(0,0,0,0.7);color:var(--text);font-size:11px;"><option value="">类型...</option>' +
+          typeOpts.map(function(t){ return '<option value="' + t + '">' + t + '</option>'; }).join('') + '</select>';
+        return '<div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;padding:5px 0;border-bottom:1px dashed rgba(255,255,255,0.07);">' +
+          '<span style="color:var(--warning);font-weight:700;min-width:30px;">#' + b.index + '</span>' +
+          '<span style="color:var(--text-dim);font-size:11px;">面积 ' + b.area + ' · 圆度 ' + b.circularity + ' · 长宽比 ' + b.aspect + '</span>' +
+          '<span style="color:var(--text-dim);font-size:11px;">HSV ' + b.hsv_mean.join('/') + '</span>' +
+          '<span style="color:var(--text-dim);font-size:11px;">纹理 ' + b.glcm.map(function(v){return v.toFixed? v.toFixed(2):v;}).join('/') + '</span>' +
+          sel + '</div>';
+      }).join('');
+      _dbi.innerHTML = '<div style="color:var(--warning);font-weight:600;margin-bottom:4px;"><i class="fas fa-th-large"></i> 缺陷块分析（' + d.defect_blocks.length + ' 块）· 选择类型可保存为标注数据</div>' + rows;
+      _dbi.style.display = '';
+    } else {
+      _dbi.style.display = 'none';
+    }
+  }
+  var _sb = document.getElementById('saveToDatasetBar');
+  var _tg = document.getElementById('saveBarToggle');
+  var _qs = document.getElementById('quickSaveBtn');
+  var _rv = document.getElementById('reviewBtn');
+  if (_sb) _sb.classList.add('d-none');
+  if (_tg) { _tg.classList.remove('d-none'); _tg.innerHTML = '<i class="fas fa-list-alt"></i> 展开'; }
+  if (_qs) { _qs.classList.remove('d-none'); _qs.innerHTML = '<i class="fas fa-save"></i> 保存'; }
+  if (_rv) { if (d.needs_review) _rv.classList.remove('d-none'); else _rv.classList.add('d-none'); }
+  // Badge
+  var g = d.grade || '';
+  var badge = document.getElementById('streamBadge');
+  if (g.indexOf('Reject') >= 0 || g.indexOf('不合格') >= 0) {
+    badge.innerHTML = '<i class="fas fa-exclamation-triangle" style="color:var(--danger);font-size:8px;"></i> DEFECT';
+    badge.style.borderColor = 'var(--danger)';
+  } else {
+    badge.innerHTML = '<i class="fas fa-circle" style="color:var(--accent);font-size:8px;"></i> ' + g;
+    badge.style.borderColor = 'var(--border)';
+  }
+  // Charts
+  var dl_c = parseFloat(d.dl_conf) || 90;
+  var yo_c = parseFloat(d.yolo_conf) || 92;
+  if (window.accChart) {
+    var accData = [
+      d.svm_grade && d.svm_grade.indexOf('Premium')>=0 ? (Math.random()*4+94).toFixed(1) : (Math.random()*4+86).toFixed(1),
+      d.rf_grade && d.rf_grade.indexOf('Premium')>=0 ? (Math.random()*4+93).toFixed(1) : (Math.random()*4+85).toFixed(1),
+      (dl_c * 100).toFixed(1), (yo_c * 100).toFixed(1)
+    ];
+    accChart.data.datasets[0].data = accData;
+    accChart.update();
+  }
+  if (window.donutChart) {
+    var ratio = parseFloat(d.defect_ratio) || 0;
+    var rej = Math.min(100, ratio);
+    var prem = Math.min(80, Math.max(0, 100 - rej * 2));
+    var std = Math.max(0, 100 - prem - rej);
+    donutChart.data.datasets[0].data = [prem, std, rej];
+    donutChart.update();
+  }
+  // Metrics
+  document.getElementById('metricLatency').textContent = (Math.random()*30+15).toFixed(1) + 'ms';
+  document.getElementById('metricMemory').textContent = (Math.random()*200+100).toFixed(0) + 'MB';
+  document.getElementById('metricGPU').textContent = (Math.random()*30+10).toFixed(0) + '%';
+  // Log
+  logCount++;
+  var log = document.getElementById('logContainer');
+  var isDefect = g.indexOf('Reject')>=0 || g.indexOf('不合格')>=0;
+  var entry = document.createElement('div');
+  entry.className = 'log-item' + (isDefect ? ' defect' : '');
+  var id = '#ID-' + logCount.toString().padStart(4,'0');
+  entry.innerHTML = '<span><span class="id" style="color:var(--primary);font-weight:600;">' + id + '</span> <span style="color:' + (isDefect?'var(--danger)':'var(--accent)') + ';font-weight:600;">' + g + '</span></span><span style="color:var(--text-dim);font-size:11px;">YOLO:' + (d.yolo_conf||'') + (d.severity ? ' · ' + d.severity : '') + '</span>';
+  log.insertBefore(entry, log.firstChild);
+  if (log.children.length > 50) log.removeChild(log.lastChild);
+}
+function saveDefectBlockType(blockIndex, type) {
+  if (!type || !window.lastDetectData) return;
+  var d = window.lastDetectData;
+  var block = (d.defect_blocks || []).filter(function(b){ return b.index === blockIndex; })[0];
+  if (!block) return;
+  var body = { filename: d.filename || '', block_index: blockIndex, type: type,
+               area: block.area, circularity: block.circularity, aspect: block.aspect,
+               hsv: block.hsv_mean, glcm: block.glcm, grade: d.grade || '' };
+  fetch('/api/defect_block/save', { method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify(body) })
+    .then(function(r){ return r.json(); })
+    .then(function(res){ if (res.ok) alert('缺陷块 #' + blockIndex + ' 类型已保存：' + type); })
+    .catch(function(){});
+}
+function up(f, quiet) {
   if (!f.type.startsWith('image/')) { alert('\u8bf7\u4e0a\u4f20\u56fe\u7247'); return; }
   document.getElementById('loadingOverlay').classList.remove('d-none');
   document.getElementById('streamStatus').innerHTML = '<i class="fas fa-spinner fa-spin"></i> \u5206\u6790\u4e2d...';
   var fd = new FormData(); fd.append('file', f);
   fd.append('category', localStorage.getItem('category') || 'apple');
+  var _ar = document.getElementById('autoReviewCb');
+  fd.append('auto_review', (!_ar || _ar.checked) ? '1' : '0');
+  var _wb = document.getElementById('wbCb');
+  fd.append('white_balance', (_wb && _wb.checked) ? '1' : '0');
   // 参数调节：前端滑条值发送给后端（百分比转小数）
   var tunVals = {
     sensitivity: document.getElementById('sensitivity') ? document.getElementById('sensitivity').value : 5,
@@ -288,76 +619,21 @@ function up(f) {
   for (var tk in tunVals) fd.append(tk, tunVals[tk]);
   var controller = new AbortController();
   var timeoutId = setTimeout(function() { controller.abort(); }, 60000);
-  fetch('/upload', { method: 'POST', body: fd, signal: controller.signal })
+  return fetch('/upload', { method: 'POST', body: fd, signal: controller.signal })
   .then(function(r) { clearTimeout(timeoutId); return r.json().then(function(d) { return { ok: r.ok, data: d }; }); })
   .then(function(t) {
     document.getElementById('loadingOverlay').classList.add('d-none');
     if (!t.ok) { alert(t.data.error || '\u68c0\u6d4b\u5931\u8d25'); return; }
     var d = t.data;
-    window.lastDetectData = d;
-    window.dsLabelEdited = false;
-    var _g = d.grade || '';
-    var _isBad = _g.indexOf('Reject') >= 0 || _g.indexOf('\u4e0d\u5408\u683c') >= 0;
-    var _rb = document.querySelector('input[name="dsLabel"][value="' + (_isBad ? '\u4e0d\u5408\u683c' : '\u5408\u683c') + '"]');
-    if (_rb) _rb.checked = true;
-    if (typeof updateDefectType === 'function') { updateDefectType(); }
-    var img = document.getElementById('resultImage');
-    img.src = d.result_image + '?t=' + Date.now();
-    img.classList.remove('d-none');
-    document.getElementById('uploadZone').classList.add('d-none');
-    document.getElementById('streamStatus').innerHTML = '<i class="fas fa-check-circle" style="color:var(--accent);"></i> \u68c0\u6d4b\u5b8c\u6210'
-    var _sb = document.getElementById('saveToDatasetBar');
-    if (_sb) _sb.classList.remove('d-none');;
-    // Badge
-    var g = d.grade || '';
-    var badge = document.getElementById('streamBadge');
-    if (g.indexOf('Reject') >= 0 || g.indexOf('\u4e0d\u5408\u683c') >= 0) {
-      badge.innerHTML = '<i class="fas fa-exclamation-triangle" style="color:var(--danger);font-size:8px;"></i> DEFECT';
-      badge.style.borderColor = 'var(--danger)';
-    } else {
-      badge.innerHTML = '<i class="fas fa-circle" style="color:var(--accent);font-size:8px;"></i> ' + g;
-      badge.style.borderColor = 'var(--border)';
-    }
-    // Charts
-    var dl_c = parseFloat(d.dl_conf) || 90;
-    var yo_c = parseFloat(d.yolo_conf) || 92;
-    if (window.accChart) {
-      var accData = [
-        d.svm_grade && d.svm_grade.indexOf('Premium')>=0 ? (Math.random()*4+94).toFixed(1) : (Math.random()*4+86).toFixed(1),
-        d.rf_grade && d.rf_grade.indexOf('Premium')>=0 ? (Math.random()*4+93).toFixed(1) : (Math.random()*4+85).toFixed(1),
-        (dl_c * 100).toFixed(1), (yo_c * 100).toFixed(1)
-      ];
-      accChart.data.datasets[0].data = accData;
-      accChart.update();
-    }
-    if (window.donutChart) {
-      var ratio = parseFloat(d.defect_ratio) || 0;
-      var rej = Math.min(100, ratio);
-      var prem = Math.min(80, Math.max(0, 100 - rej * 2));
-      var std = Math.max(0, 100 - prem - rej);
-      donutChart.data.datasets[0].data = [prem, std, rej];
-      donutChart.update();
-    }
-    // Metrics
-    document.getElementById('metricLatency').textContent = (Math.random()*30+15).toFixed(1) + 'ms';
-    document.getElementById('metricMemory').textContent = (Math.random()*200+100).toFixed(0) + 'MB';
-    document.getElementById('metricGPU').textContent = (Math.random()*30+10).toFixed(0) + '%';
-    // Log
-    logCount++;
-    var log = document.getElementById('logContainer');
-    var isDefect = g.indexOf('Reject')>=0 || g.indexOf('\u4e0d\u5408\u683c')>=0;
-    var entry = document.createElement('div');
-    entry.className = 'log-item' + (isDefect ? ' defect' : '');
-    var id = '#ID-' + logCount.toString().padStart(4,'0');
-    entry.innerHTML = '<span><span class="id" style="color:var(--primary);font-weight:600;">' + id + '</span> <span style="color:' + (isDefect?'var(--danger)':'var(--accent)') + ';font-weight:600;">' + g + '</span></span><span style="color:var(--text-dim);font-size:11px;">YOLO:' + (d.yolo_conf||'') + '</span>';
-    log.insertBefore(entry, log.firstChild);
-    if (log.children.length > 50) log.removeChild(log.lastChild);
+    renderResult(d);
+    return d;
   })
   .catch(function(err) {
     document.getElementById('loadingOverlay').classList.add('d-none');
     document.getElementById('streamStatus').innerHTML = '<i class="fas fa-exclamation-triangle" style="color:var(--danger);"></i> \u68c0\u6d4b\u5931\u8d25';
     console.error('Detection error:', err);
-    alert('\u68c0\u6d4b\u5931\u8d25: ' + (err.message || err));
+    if (!quiet) alert('检测失败: ' + (err.message || err));
+    return null;
   });
 }
 
@@ -368,6 +644,18 @@ function toggleSmartPanel() {
 function onDsLabelChange() {
   window.dsLabelEdited = true;
   updateDefectType();
+}
+function quickSave() {
+  if (!window.lastDetectData || !window.lastDetectData.original_image) { alert('\u8bf7\u5148\u68c0\u6d4b\u56fe\u7247'); return; }
+  saveToDataset(document.getElementById('quickSaveBtn'));
+}
+function toggleSaveBar() {
+  var bar = document.getElementById('saveToDatasetBar');
+  var tg = document.getElementById('saveBarToggle');
+  var showing = bar && !bar.classList.contains('d-none');
+  if (showing) { bar.classList.add('d-none'); }
+  else if (bar) { bar.classList.remove('d-none'); }
+  if (tg) tg.innerHTML = showing ? '<i class="fas fa-list-alt"></i> \u5c55\u5f00' : '<i class="fas fa-chevron-down"></i> \u6536\u8d77';
 }
 function updateDefectType() {
   var dt = document.getElementById('defectType');
@@ -417,17 +705,21 @@ function smartPreview() {
     el.innerHTML = html;
   }).catch(function(e) { el.innerHTML = '\u5206\u6790\u5931\u8d25: ' + e.message; });
 }
-function saveToDataset() {
+function saveToDataset(btnEl) {
   if (!window.lastDetectData || !window.lastDetectData.original_image) { alert('\u8bf7\u5148\u68c0\u6d4b\u56fe\u7247'); return; }
+  var sidInput = prompt('样本编号 sample_id（可留空；填了会同步保存到 multimodal_data/visual/ 供四觉关联）', '');
+  if (sidInput === null) { return; }
+  var sidVal = sidInput.trim();
   var cat = document.querySelector('input[name="dsLabel"]:checked').value;
   var catId = localStorage.getItem('category') || 'apple';
   var defectType = document.getElementById('defectType').value;
-  var btn = document.querySelector('#saveToDatasetBar button[onclick="saveToDataset()"]');
+  var btn = btnEl || document.querySelector('#saveToDatasetBar button[onclick="saveToDataset()"]');
   var orig = btn.innerHTML;
   btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> \u4fdd\u5b58\u4e2d...';
   imageBlob().then(function(blob) {
     var fd = new FormData();
     fd.append('file', blob, 'capture_' + Date.now() + '.jpg');
+    if (sidVal) { fd.append('sample_id', sidVal); }
     fd.append('category', catId);
     fd.append('label', cat);
     if (window.dsLabelEdited && window.lastDetectData.id) { fd.append('record_id', window.lastDetectData.id); }
@@ -439,10 +731,11 @@ function saveToDataset() {
     btn.innerHTML = orig;
     if (t.ok) {
       var n = (t.data.files || []).length;
-      var msg = '\u5df2\u4fdd\u5b58 ' + n + ' \u5f20';
-      if (t.data.report && t.data.report.augment && t.data.report.augment.length) {
-        msg += ' (\u542b\u589e\u5f3a ' + t.data.report.augment.length + ' \u5f20)';
-      }
+      var msg = '已保存 ' + n + ' 张';
+      var _detailParts = [];
+      if (t.data.report && t.data.report.crop) _detailParts.push('原图+去背景裁剪');
+      if (t.data.report && t.data.report.augment && t.data.report.augment.length) _detailParts.push('增强 x' + t.data.report.augment.length);
+      if (_detailParts.length) msg += '（' + _detailParts.join('，') + '）';
       if (t.data.history_updated) { msg += '\uff0c\u5df2\u540c\u6b65\u4fee\u6b63\u5386\u53f2\u8bb0\u5f55'; }
       btn.innerHTML = '<i class="fas fa-check"></i> ' + msg;
       setTimeout(function() { btn.innerHTML = orig; }, 2500);
@@ -455,7 +748,7 @@ function saveToDataset() {
   }).catch(function(e) { btn.innerHTML = orig; alert('\u4fdd\u5b58\u5931\u8d25: ' + e.message); });
 }
 
-// ===== ???????????????? / ?????? =====
+// ===== 框选重建 / 手动选区 =====
 var cropState = {mode:false, canvas:null, ctx:null, img:null, rect:null, start:null, imgRect:null};
 function _cropCanvas() {
   if (cropState.canvas) return cropState.canvas;
@@ -509,6 +802,12 @@ function _cropResize() {
   var imgEl = document.getElementById('resultImage');
   var cw = imgEl.clientWidth, ch = imgEl.clientHeight;
   if (cw < 10 || ch < 10) return;
+  var ocw = cropState.canvas.width, och = cropState.canvas.height;
+  if (ocw > 0 && och > 0 && cropState.rect) {
+    var kx = cw / ocw, ky = ch / och;
+    var r = cropState.rect;
+    cropState.rect = {x: r.x * kx, y: r.y * ky, w: r.w * kx, h: r.h * ky};
+  }
   cropState.canvas.width = cw;
   cropState.canvas.height = ch;
   _cropDraw();
@@ -550,17 +849,35 @@ function enterCropMode() {
     _cropResize();
     c.style.display = '';
     document.getElementById('saveToDatasetBar').classList.add('d-none');
+    var _tg0 = document.getElementById('saveBarToggle');
+    if (_tg0) _tg0.classList.add('d-none');
+    var _qs0 = document.getElementById('quickSaveBtn');
+    if (_qs0) _qs0.classList.add('d-none');
+    cropConfirmAction = null;
+    _syncCropLabel();
     document.getElementById('cropHint').classList.remove('d-none');
     document.getElementById('cropActionBar').classList.add('d-none');
+    document.getElementById('cropConfirmBar').classList.add('d-none');
   };
-  img.src = imgEl.src.split('?')[0] + '?t=' + Date.now();
+  var _orig = (window.lastDetectData && window.lastDetectData.original_image)
+    ? window.lastDetectData.original_image : imgEl.src.split('?')[0];
+  img.src = _orig + (_orig.indexOf('?') >= 0 ? '&' : '?') + 't=' + Date.now();
 }
 function exitCropMode() {
+  cropConfirmAction = null;
   cropState.mode = false; cropState.start = null; cropState.rect = null;
   if (cropState.canvas) cropState.canvas.style.display = 'none';
   document.getElementById('cropHint').classList.add('d-none');
   document.getElementById('cropActionBar').classList.add('d-none');
-  if (window.lastDetectData) document.getElementById('saveToDatasetBar').classList.remove('d-none');
+  var _cbx = document.getElementById('cropConfirmBar');
+  if (_cbx) _cbx.classList.add('d-none');
+  if (window.lastDetectData) {
+    document.getElementById('saveToDatasetBar').classList.add('d-none');
+    var _tg1 = document.getElementById('saveBarToggle');
+    if (_tg1) { _tg1.classList.remove('d-none'); _tg1.innerHTML = '<i class="fas fa-list-alt"></i> \u5c55\u5f00'; }
+    var _qs1 = document.getElementById('quickSaveBtn');
+    if (_qs1) { _qs1.classList.remove('d-none'); _qs1.innerHTML = '<i class="fas fa-save"></i> \u4fdd\u5b58'; }
+  }
 }
 function _cropShowActions() {
   document.getElementById('cropHint').classList.add('d-none');
@@ -579,28 +896,112 @@ function _cropBlob(cb) {
   out.getContext('2d').drawImage(img, sx, sy, sw, sh, 0, 0, out.width, out.height);
   out.toBlob(cb, 'image/jpeg', 0.92);
 }
+function cropRedoSelect() {
+  cropConfirmAction = null;
+  cropState.rect = null; cropState.start = null;
+  _cropDraw();
+  var _cb = document.getElementById('cropConfirmBar');
+  if (_cb) _cb.classList.add('d-none');
+  document.getElementById('cropActionBar').classList.add('d-none');
+  document.getElementById('cropHint').classList.remove('d-none');
+}
+function _syncCropLabel() {
+  var rb = document.querySelector('input[name="dsLabel"]:checked');
+  var val = rb ? rb.value : '\u5408\u683c';
+  var crb = document.querySelector('input[name="cropLabel"][value="' + val + '"]');
+  if (crb) crb.checked = true;
+  var dt = document.getElementById('cropDefectType');
+  var mainDt = document.getElementById('defectType');
+  if (dt && mainDt) dt.value = mainDt.value;
+  onCropLabelChange();
+}
+function onCropLabelChange() {
+  var rb = document.querySelector('input[name="cropLabel"]:checked');
+  var dt = document.getElementById('cropDefectType');
+  if (dt) dt.style.display = (rb && rb.value === '\u4e0d\u5408\u683c') ? '' : 'none';
+  window.dsLabelEdited = true;
+}
+var cropConfirmAction = null;
+function cropConfirm(text, onOk) {
+  cropConfirmAction = onOk;
+  document.getElementById('cropConfirmText').textContent = text;
+  document.getElementById('cropActionBar').classList.add('d-none');
+  document.getElementById('cropConfirmBar').classList.remove('d-none');
+}
+function cropConfirmOk() {
+  var fn = cropConfirmAction;
+  cropConfirmAction = null;
+  document.getElementById('cropConfirmBar').classList.add('d-none');
+  document.getElementById('cropActionBar').classList.remove('d-none');
+  if (fn) fn();
+}
 function cropRedetect() {
   if (!cropState.rect) { alert('\u8bf7\u5148\u62d6\u52a8\u62d3\u62f3\u9009\u62e9\u8981\u91cd\u68c0\u7684\u533a\u57df'); return; }
-  _cropBlob(function(blob) {
-    exitCropMode();
-    up(new File([blob], 'crop.jpg', {type: 'image/jpeg'}));
+  cropConfirm('\u786e\u8ba4\u4f7f\u7528\u5f53\u524d\u6846\u9009\u533a\u57df\u91cd\u65b0\u68c0\u6d4b\uff1f', function() {
+    _cropBlob(function(blob) {
+      exitCropMode();
+      up(new File([blob], 'crop.jpg', {type: 'image/jpeg'}));
+    });
   });
+}
+function cropExportYolo() {
+  if (!cropState.rect) { alert('\u8bf7\u5148\u5728\u56fe\u7247\u4e0a\u62d6\u52a8\u62d3\u62f3\u9009\u62e9\u82f9\u679c\u533a\u57df'); return; }
+  cropConfirm('\u786e\u8ba4\u5c06\u5f53\u524d\u6846\u9009\u4f5c\u4e3a YOLO \u68c0\u6d4b\u6807\u6ce8\u5bfc\u51fa\u5230\u8bad\u7ec3\u96c6\uff1f\uff08\u5bfc\u51fa\u540e\u53ef\u5230\u300c\u6570\u636e\u96c6\u300d\u9875\u9762\u91cd\u8bad\u68c0\u6d4b\u6a21\u578b\uff09', _cropYoloExec);
+}
+function _cropYoloExec() {
+  var btn = document.getElementById('cropYoloBtn');
+  var orig = btn.innerHTML;
+  btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> \u5bfc\u51fa\u4e2d...';
+  try {
+    if (!window.lastDetectData || !window.lastDetectData.original_image) {
+      btn.innerHTML = orig; alert('\u672a\u627e\u5230\u539f\u56fe\uff0c\u65e0\u6cd5\u5bfc\u51fa YOLO \u6807\u6ce8'); return;
+    }
+    var r = cropState.rect, ir = cropState.imgRect, img = cropState.img;
+    var iw = img.naturalWidth, ih = img.naturalHeight;
+    var sx = Math.max(0, (r.x - ir.x) / ir.s);
+    var sy = Math.max(0, (r.y - ir.y) / ir.s);
+    var sw = Math.min(iw - sx, r.w / ir.s);
+    var sh = Math.min(ih - sy, r.h / ir.s);
+    if (sw < 4 || sh < 4) { btn.innerHTML = orig; alert('\u9009\u533a\u8fc7\u5c0f'); return; }
+    var xc = (sx + sw / 2) / iw, yc = (sy + sh / 2) / ih;
+    var nw = sw / iw, nh = sh / ih;
+    fetch(window.lastDetectData.original_image).then(function(resp) { return resp.blob(); }).then(function(blob) {
+      var fd = new FormData();
+      fd.append('file', blob, 'yolo_export_' + Date.now() + '.jpg');
+      fd.append('category', localStorage.getItem('category') || 'apple');
+      fd.append('bbox', JSON.stringify([xc, yc, nw, nh]));
+      return fetch('/api/yolo/export_box', { method: 'POST', body: fd });
+    }).then(function(r) { return r.json(); }).then(function(d) {
+      btn.innerHTML = orig;
+      if (d.success) {
+        btn.innerHTML = '<i class="fas fa-check"></i> \u5df2\u5bfc\u51fa YOLO \u6807\u6ce8: ' + d.image;
+        setTimeout(function() { btn.innerHTML = orig; }, 4000);
+      } else { alert(d.error || '\u5bfc\u51fa\u5931\u8d25'); }
+    }).catch(function(e) { btn.innerHTML = orig; alert('\u5bfc\u51fa\u5931\u8d25: ' + e.message); });
+  } catch (err) { btn.innerHTML = orig; alert('\u5bfc\u51fa\u5931\u8d25: ' + err.message); }
 }
 function cropSaveToDataset() {
   if (!cropState.rect) { alert('\u8bf7\u5148\u5728\u56fe\u7247\u4e0a\u62d6\u52a8\u62d3\u62f3\u9009\u533a\uff0c\u518d\u70b9\u51fb\u201c\u4fdd\u5b58\u9009\u533a\u201d'); return; }
+  cropConfirm('\u786e\u8ba4\u5c06\u5f53\u524d\u6846\u9009\u533a\u57df\u4fdd\u5b58\u5230\u6570\u636e\u96c6\uff1f', _cropSaveExec);
+}
+function _cropSaveExec() {
   var btn = document.getElementById('cropSaveBtn');
   var orig = btn.innerHTML;
   btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> \u4fdd\u5b58\u4e2d...';
   try {
     _cropBlob(function(blob) {
       if (!blob) { btn.innerHTML = orig; alert('\u88c1\u526a\u751f\u6210\u5931\u8d25\uff0c\u8bf7\u91cd\u65b0\u62d6\u52a8\u9009\u533a'); return; }
+      var sidInput = prompt('\u6837\u672c\u7f16\u53f7 sample_id\uff08\u53ef\u7559\u7a7a\uff1b\u586b\u4e86\u4f1a\u540c\u6b65\u4fdd\u5b58\u5230 multimodal_data/visual/ \u4f9b\u56db\u89c9\u5173\u8054\uff09', '');
+      if (sidInput === null) { btn.innerHTML = orig; return; }
+      var sidVal = sidInput.trim();
       var fd = new FormData();
       fd.append('file', blob, 'crop_' + Date.now() + '.jpg');
+      if (sidVal) { fd.append('sample_id', sidVal); }
       fd.append('category', localStorage.getItem('category') || 'apple');
-      var rb = document.querySelector('input[name="dsLabel"]:checked');
+      var rb = document.querySelector('input[name="cropLabel"]:checked');
       var lab = rb ? rb.value : '\u5408\u683c';
       fd.append('label', lab);
-      var dt = document.getElementById('defectType');
+      var dt = document.getElementById('cropDefectType');
       if (lab === '\u4e0d\u5408\u683c' && dt && dt.value) fd.append('defect_type', dt.value);
       if (window.dsLabelEdited && window.lastDetectData && window.lastDetectData.id) { fd.append('record_id', window.lastDetectData.id); }
       var opts = collectOptions();
@@ -612,8 +1013,12 @@ function cropSaveToDataset() {
           btn.innerHTML = orig;
           if (d.success) {
             var n = (d.files || []).length;
-            var msg = '\u5df2\u4fdd\u5b58 ' + n + ' \u5f20\u5230\u6570\u636e\u96c6: ' + d.category + '/' + d.label;
-            if (d.history_updated) { msg += '\uff0c\u5e76\u5df2\u540c\u6b65\u4fee\u6b63\u5386\u53f2\u7b49\u7ea7'; }
+            var msg = '已保存 ' + n + ' 张到数据集: ' + d.category + '/' + d.label;
+            var _parts = [];
+            if (d.report && d.report.crop) _parts.push('原图+去背景裁剪');
+            if (d.report && d.report.augment && d.report.augment.length) _parts.push('增强 x' + d.report.augment.length);
+            if (_parts.length) msg += '（' + _parts.join('，') + '）';
+            if (d.history_updated) { msg += '，并已同步修正历史等级'; }
             btn.innerHTML = '<i class="fas fa-check"></i> ' + msg;
             setTimeout(function() { btn.innerHTML = orig; }, 4000);
           } else { alert(d.error || '\u4fdd\u5b58\u5931\u8d25'); }
@@ -625,5 +1030,67 @@ function cropSaveToDataset() {
     alert('\u4fdd\u5b58\u5931\u8d25: ' + err.message);
   }
 }
+
+function startMultiView() {
+  var inp = document.getElementById('multiFileInput');
+  if (!inp) {
+    inp = document.createElement('input');
+    inp.type = 'file';
+    inp.id = 'multiFileInput';
+    inp.accept = 'image/*';
+    inp.multiple = true;
+    document.body.appendChild(inp);
+  }
+  inp.onchange = function() { doMultiDetect(inp.files); inp.value = ''; };
+  inp.click();
+}
+function doMultiDetect(files) {
+  if (!files || files.length < 2) { alert('请至少选择 2 张（同一苹果的不同面，最多 8 张）'); return; }
+  if (files.length > 8) { alert('一次最多 8 张'); return; }
+  var fd = new FormData();
+  for (var i = 0; i < files.length; i++) fd.append('files', files[i]);
+  fd.append('category', 'apple');
+  var box = document.getElementById('multiViewPanel');
+  var status = document.getElementById('multiStatus');
+  box.style.display = 'block';
+  status.innerHTML = '<i class="fas fa-spinner fa-spin"></i> 正在逐面检测 ' + files.length + ' 张图片，请稍候…';
+  fetch('/api/multi_detect', { method: 'POST', body: fd })
+    .then(function(r){ return r.json().then(function(d){ return { ok: r.ok, d: d }; }); })
+    .then(function(res){
+      if (!res.ok) { status.innerHTML = '<span style="color:var(--danger);">' + (res.d.error || '检测失败') + '</span>'; return; }
+      renderMultiResult(res.d);
+    })
+    .catch(function(e){ status.innerHTML = '<span style="color:var(--danger);">请求失败：' + e + '</span>'; });
+}
+function renderMultiResult(d) {
+  var status = document.getElementById('multiStatus');
+  var f = d.fused;
+  var isBad = function(g){ return String(g).indexOf('不合格') >= 0 || String(g).indexOf('Reject') >= 0 || String(g).indexOf('残次') >= 0; };
+  var gradeColor = isBad(f.grade) ? '#ff4757' : (String(f.grade).indexOf('特级') >= 0 || String(f.grade).indexOf('Premium') >= 0 ? '#00ff88' : '#ffd166');
+  var html = '综合判定：<b style="color:' + gradeColor + ';font-size:16px;">' + f.grade + '</b>' +
+    '　缺陷占比 <b>' + f.defect_ratio + '</b>　最差面：第 ' + f.worst_face + ' 张' +
+    (f.needs_review ? '　<span style="color:var(--warning);"><i class="fas fa-exclamation-triangle"></i> 需复核</span>' : '');
+  if (f.review_reason) html += '<div style="font-size:11px;color:var(--warning);margin-top:4px;">' + f.review_reason + '</div>';
+  status.innerHTML = html;
+  var grid = '<div style="font-size:12px;color:var(--text-dim);margin-bottom:8px;"><i class="fas fa-layer-group"></i> 各面检测结果（任一而有缺陷 → 整体判不合格，防漏检）</div><div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:8px;">';
+  (d.faces || []).forEach(function(face){
+    var fb = isBad(face.grade);
+    var fc = fb ? '#ff4757' : '#00ff88';
+    grid += '<div style="border:1px solid ' + (fb ? 'rgba(255,71,87,0.55)' : 'var(--border)') + ';border-radius:8px;overflow:hidden;background:rgba(0,0,0,0.35);">' +
+      '<img src="' + (face.detect_image || face.result_image || '') + '" style="width:100%;height:110px;object-fit:cover;display:block;">' +
+      '<div style="padding:6px 8px;">' +
+      '<div style="font-size:11px;color:var(--text-dim);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">面 ' + face.index + ' · ' + String(face.name || '').slice(0, 18) + '</div>' +
+      '<div style="font-size:14px;font-weight:700;color:' + fc + ';">' + face.grade + '</div>' +
+      '<div style="font-size:11px;color:var(--text-dim);">缺陷 ' + face.defect_ratio + ' · ' + face.defect_count + ' 处 · ' + face.severity + '</div>' +
+      '<div style="font-size:10px;color:var(--text-dim);">融合: ' + face.fusion_grade + ' (' + (face.fusion_conf * 100).toFixed(0) + '%)</div>' +
+      '</div></div>';
+  });
+  grid += '</div>';
+  if (d.warnings && d.warnings.length) {
+    grid += '<div style="margin-top:8px;font-size:11px;color:var(--warning);">' + d.warnings.map(function(w){ return '第 ' + w.index + ' 张检测失败：' + w.error; }).join('；') + '</div>';
+  }
+  document.getElementById('multiFaces').innerHTML = grid;
+}
+
 </script>
 {% endblock %}

@@ -1,0 +1,135 @@
+{% extends "base.html" %}
+{% block title %}{% if module == 'slice' %}切片·{% endif %}电子鼻{% endblock %}
+{% block content %}
+<style>
+.enose-wrap { max-width: 1000px; margin: 0 auto; }
+.enose-card { background: rgba(12,20,38,0.75); border: 1px solid var(--border); border-radius: 14px; padding: 16px; margin-bottom: 14px; backdrop-filter: blur(10px); }
+.enose-card h4 { font-size: 14px; color: var(--primary); margin: 0 0 10px; }
+.enose-drop { border: 2px dashed var(--border); border-radius: 12px; padding: 26px; text-align: center; color: var(--text-dim); cursor: pointer; transition: .2s; }
+.enose-drop:hover, .enose-drop.drag { border-color: var(--primary); color: var(--primary); }
+.enose-curve-box { height: 240px; position: relative; }
+.enose-feat-table { width: 100%; font-size: 11px; border-collapse: collapse; }
+.enose-feat-table th, .enose-feat-table td { padding: 4px 6px; border-bottom: 1px solid rgba(255,255,255,0.06); text-align: right; }
+.enose-feat-table th:first-child, .enose-feat-table td:first-child { text-align: left; color: var(--text-dim); }
+.enose-result { display: flex; gap: 10px; flex-wrap: wrap; align-items: center; margin-top: 10px; }
+.enose-badge { padding: 6px 16px; border-radius: 10px; font-size: 15px; font-weight: 700; }
+</style>
+
+<div class="enose-wrap">
+  <h3 style="margin:0 0 4px;font-size:18px;">{% if module == 'slice' %}切片·{% endif %}电子鼻（嗅觉）</h3>
+  <div style="font-size:12px;color:var(--text-dim);margin-bottom:14px;">
+    {% if module == 'slice' %}切片模块：请使用鲜切苹果切片样本的电子鼻采样数据。{% endif %}
+    上传一条气味采样 CSV（<code>enose/collect.py</code> 输出，含 10 通道：MQ1~MQ4/tempC/humPct/pressPa/gasOhm/eco2/tvoc）→ 自动 S-G 滤波 + 提取 60 维特征 → 预测新鲜度
+  </div>
+
+  <div class="enose-card">
+    <h4><i class="fas fa-upload"></i> 上传气味数据</h4>
+    <div class="enose-drop" id="enoseDrop">
+      <i class="fas fa-cloud-upload-alt" style="font-size:34px;margin-bottom:8px;display:block;"></i>
+      点击或拖拽 CSV 到此处（每行 11 列：ts_ms,10通道）
+    </div>
+    <input type="file" id="enoseFile" accept=".csv" style="display:none;">
+    <div id="enoseMsg" style="font-size:12px;color:var(--text-dim);margin-top:8px;"></div>
+    <div class="enose-result" id="enoseResult" style="display:none;"></div>
+  </div>
+
+  <div class="enose-card" id="enoseCurveCard" style="display:none;">
+    <h4><i class="fas fa-chart-line"></i> 传感器响应曲线（S-G 滤波后）</h4>
+    <div class="enose-curve-box"><canvas id="enoseChart"></canvas></div>
+    <div style="margin-top:6px;font-size:11px;color:var(--text-dim);" id="enoseChannels"></div>
+  </div>
+
+  <div class="enose-card" id="enoseFeatCard" style="display:none;">
+    <h4><i class="fas fa-table"></i> 每通道 6 特征（start/steady/range/slope1/auc/ratio）</h4>
+    <div style="max-height:300px;overflow-y:auto;"><table class="enose-feat-table" id="enoseFeatTable"></table></div>
+  </div>
+
+  <div class="enose-card">
+    <h4><i class="fas fa-cog"></i> 使用方法</h4>
+    <ol style="font-size:12px;color:var(--text-dim);line-height:1.9;margin:0;padding-left:18px;">
+      <li>按 <code>enose/README.md</code> 接线烧录 ESP32，插上传感器预热 10~15 分钟</li>
+      <li>采集：<code>python enose/collect.py --port COM3 --label apple --out multimodal_data/odor/raw/20260806_apple_001.csv</code></li>
+      <li>批量预处理：<code>python enose/preprocess.py multimodal_data/odor/raw --out multimodal_data/odor/features.csv</code></li>
+      <li>训练模型：<code>python enose/train.py multimodal_data/odor/features.csv --compare</code></li>
+      <li>本页上传单条 CSV 即可实时预测（需先训练模型 <code>python enose/predict_freshness.py --train-from ...</code>）</li>
+    </ol>
+  </div>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+<script>
+var DEFCAT = "{{ default_category|default('') }}";
+var enoseChartInst = null;
+var enoseDrop = document.getElementById('enoseDrop');
+var enoseFile = document.getElementById('enoseFile');
+enoseDrop.addEventListener('click', function(){ enoseFile.click(); });
+enoseDrop.addEventListener('dragover', function(e){ e.preventDefault(); enoseDrop.classList.add('drag'); });
+enoseDrop.addEventListener('dragleave', function(){ enoseDrop.classList.remove('drag'); });
+enoseDrop.addEventListener('drop', function(e){ e.preventDefault(); enoseDrop.classList.remove('drag'); if (e.dataTransfer.files.length) uploadEnose(e.dataTransfer.files[0]); });
+enoseFile.addEventListener('change', function(){ if (this.files.length) uploadEnose(this.files[0]); });
+
+function uploadEnose(file) {
+  if (!file.name.toLowerCase().endsWith('.csv')) { alert('请上传 CSV 文件'); return; }
+  var fd = new FormData(); fd.append('file', file);
+  document.getElementById('enoseMsg').innerHTML = '<i class="fas fa-spinner fa-spin"></i> 分析中...';
+  document.getElementById('enoseResult').style.display = 'none';
+  fetch('/api/enose/predict' + (typeof DEFCAT !== 'undefined' && DEFCAT ? '?module=slice' : ''), { method: 'POST', body: fd })
+    .then(function(r){ return r.json().then(function(d){ return {ok: r.ok, d: d}; }); })
+    .then(function(t){
+      var d = t.d;
+      document.getElementById('enoseMsg').innerHTML = '';
+      if (!t.ok) { alert(d.error || '分析失败'); return; }
+      showEnoseResult(d);
+    })
+    .catch(function(e){ document.getElementById('enoseMsg').innerHTML = '<span style="color:var(--danger);">分析失败: ' + e.message + '</span>'; });
+}
+
+function showEnoseResult(d) {
+  // 预测结果
+  var res = document.getElementById('enoseResult');
+  if (d.prediction || d.regression) {
+    res.style.display = 'flex';
+    var isBad = String(d.prediction || '').toLowerCase().indexOf('rotten') >= 0 || String(d.prediction || '').indexOf('不合格') >= 0;
+    var html = '';
+    if (d.prediction) {
+      html += '<span class="enose-badge" style="background:' + (isBad ? 'rgba(255,71,87,0.2)' : 'rgba(0,255,136,0.2)') + ';color:' + (isBad ? 'var(--danger)' : 'var(--accent)') + ';">' + d.prediction + '</span>' +
+        (d.proba ? '<span style="font-size:12px;color:var(--text-dim);">' + d.proba.map(function(p){ return p.k + ' ' + (p.v*100).toFixed(1) + '%'; }).join(' · ') + '</span>' : '') +
+        (d.model ? '<span style="font-size:11px;color:var(--text-dim);">模型: ' + d.model + '</span>' : '');
+    }
+    if (d.regression && d.regression.value !== null && d.regression.value !== undefined) {
+      html += '<span class="enose-badge" style="background:rgba(0,212,255,0.15);color:var(--primary);"><i class="fas fa-hourglass-half"></i> 预测' + d.regression.target + ': ' + d.regression.value + ' ' + d.regression.unit + '</span>';
+    }
+    res.innerHTML = html;
+  } else {
+    res.style.display = 'none';
+  }
+  // 曲线
+  if (d.curves) {
+    document.getElementById('enoseCurveCard').style.display = '';
+    document.getElementById('enoseChannels').textContent = '通道: ' + d.channels.join(', ');
+    var labels = Array.from({length: d.curves[0].length}, function(_, i){ return i; });
+    if (enoseChartInst) enoseChartInst.destroy();
+    enoseChartInst = new Chart(document.getElementById('enoseChart'), {
+      type: 'line',
+      data: { labels: labels, datasets: d.curves.map(function(c, i){
+        return { label: d.channels[i], data: c, borderColor: 'hsl(' + (i*36) + ',80%,60%)', borderWidth: 1.2, pointRadius: 0, tension: 0.3, fill: false };
+      })},
+      options: { responsive: true, maintainAspectRatio: false,
+        plugins: { legend: { labels: { color: '#8899bb', font: {size:9}, boxWidth: 10 } } },
+        scales: { x: { grid: {color:'rgba(0,212,255,0.06)'}, ticks: {color:'#8899bb', font:{size:9}} },
+                  y: { grid: {color:'rgba(0,212,255,0.06)'}, ticks: {color:'#8899bb', font:{size:9}} } } }
+    });
+  }
+  // 特征表
+  if (d.features) {
+    document.getElementById('enoseFeatCard').style.display = '';
+    var chs = d.channels, fs = d.features, fk = ['start','steady','range','slope1','auc','ratio'];
+    var html = '<thead><tr><th>通道</th>' + fk.map(function(k){return '<th>'+k+'</th>';}).join('') + '</tr></thead><tbody>';
+    fs.forEach(function(row, i){
+      html += '<tr><td>' + chs[i] + '</td>' + row.map(function(v){ return '<td>' + (typeof v === 'number' ? v.toFixed(3) : v) + '</td>'; }).join('') + '</tr>';
+    });
+    document.getElementById('enoseFeatTable').innerHTML = html + '</tbody>';
+  }
+}
+</script>
+{% endblock %}

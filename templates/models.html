@@ -1,0 +1,76 @@
+{% extends "base.html" %}
+{% block title %}模型管理{% endblock %}
+{% block content %}
+<style>
+.md-wrap { max-width: 1100px; margin: 0 auto; }
+.md-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
+@media (max-width: 900px) { .md-grid { grid-template-columns: 1fr; } }
+.md-card { background: rgba(12,20,38,0.75); border: 1px solid var(--border); border-radius: 14px; padding: 16px; backdrop-filter: blur(10px); }
+.md-card h4 { font-size: 14px; color: var(--primary); margin: 0 0 12px; }
+.md-table { width: 100%; font-size: 12px; border-collapse: collapse; }
+.md-table th, .md-table td { padding: 7px 8px; border-bottom: 1px solid rgba(255,255,255,0.06); text-align: left; }
+.md-table th { color: var(--text-dim); font-weight: 600; }
+.md-ok { color: var(--accent); }
+.md-no { color: var(--text-dim); }
+.md-tag { display: inline-block; padding: 2px 8px; border-radius: 6px; font-size: 11px; }
+.md-tag-ok { background: rgba(0,255,136,0.15); color: var(--accent); }
+.md-tag-no { background: rgba(255,71,87,0.15); color: var(--danger); }
+.md-tip { font-size: 12px; color: var(--text-dim); line-height: 1.9; margin: 0; padding-left: 18px; }
+.md-path { font-family: ui-monospace, Consolas, monospace; font-size: 11px; color: var(--text-dim); word-break: break-all; }
+</style>
+
+<div class="md-wrap">
+  <div style="margin-bottom:14px;">
+    <h3 style="margin:0 0 4px;font-size:18px;"><i class="fas fa-cube" style="color:var(--primary);"></i> 模型管理</h3>
+    <div style="font-size:12px;color:var(--text-dim);">
+      外观检测 与 切片检测 两大模块的模型<b>完全独立</b>：外观模型文件固定（apple_*），切片模块使用内置规则算法 + 独立电子鼻模型（freshness_rf_slice.pkl）。切片品类已禁止重训，避免覆盖外观模型。
+    </div>
+  </div>
+
+  <div class="md-grid">
+    <div class="md-card">
+      <h4><i class="fas fa-camera"></i> 外观检测模块</h4>
+      <table class="md-table">
+        <thead><tr><th>模型</th><th>状态</th><th>大小</th><th>更新时间</th></tr></thead>
+        <tbody id="mdSurface"></tbody>
+      </table>
+      <div style="font-size:11px;color:var(--text-dim);margin-top:8px;">模型文件位于项目根目录（apple_svm_model.dat / apple_rf_model.pkl / apple_dl_model.pth / yolo_*）</div>
+    </div>
+
+    <div class="md-card">
+      <h4><i class="fas fa-cut"></i> 切片检测模块</h4>
+      <table class="md-table">
+        <thead><tr><th>模型</th><th>状态</th><th>大小</th><th>更新时间</th></tr></thead>
+        <tbody id="mdSlice"></tbody>
+      </table>
+      <div style="font-size:11px;color:var(--text-dim);margin-top:8px;">切片电子鼻模型需用切片采样数据训练后生成：<code>python enose/predict_freshness.py --train-from ...</code>，输出到 enose/models/freshness_rf_slice.pkl</div>
+    </div>
+  </div>
+
+  <div class="md-card" style="margin-top:14px;">
+    <h4><i class="fas fa-shield-alt"></i> 隔离规则（保证不混用）</h4>
+    <ul class="md-tip">
+      <li>切片视觉检测：内置规则算法（<code>slice_detector.py</code>），不加载任何外观模型</li>
+      <li>切片品类（apple_slice）重训/导出训练集已被后端禁用，命令行脚本同样有保护</li>
+      <li>电子鼻按模块区分模型文件：外观 <code>freshness_rf.pkl</code> / 切片 <code>freshness_rf_slice.pkl</code></li>
+      <li>历史/统计/数据集/标注数据按品类隔离：切片 = apple_slice，外观 = apple/bread/beverage</li>
+    </ul>
+  </div>
+</div>
+
+<script>
+function loadModelStatus() {
+  fetch('/api/models/status').then(function (r) { return r.json(); }).then(function (d) {
+    var s = document.getElementById('mdSurface');
+    s.innerHTML = (d.surface || []).map(function (m) {
+      return '<tr><td>' + m.name + '</td><td>' + (m.exists ? '<span class="md-tag md-tag-ok">已就绪</span>' : '<span class="md-tag md-tag-no">未加载</span>') + '</td><td>' + (m.size_kb ? m.size_kb + ' KB' : '--') + '</td><td>' + (m.updated || '--') + '</td></tr>';
+    }).join('');
+    var sl = document.getElementById('mdSlice');
+    sl.innerHTML = (d.slice || []).map(function (m) {
+      return '<tr><td>' + m.name + '</td><td>' + (m.exists ? '<span class="md-tag md-tag-ok">已就绪</span>' : '<span class="md-tag md-tag-no">未训练</span>') + '</td><td>' + (m.size_kb ? m.size_kb + ' KB' : '--') + '</td><td>' + (m.updated || '--') + '</td></tr>';
+    }).join('');
+  });
+}
+loadModelStatus();
+</script>
+{% endblock %}

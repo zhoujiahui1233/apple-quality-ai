@@ -1,0 +1,257 @@
+{% extends "base.html" %}
+{% block title %}{% if module == 'slice' %}切片·{% endif %}感官数据{% endblock %}
+{% block content %}
+<style>
+.sens-wrap { max-width: 1100px; margin: 0 auto; }
+.sens-grid { display: grid; grid-template-columns: 420px 1fr; gap: 16px; }
+@media (max-width: 900px) { .sens-grid { grid-template-columns: 1fr; } }
+.sens-card { background: rgba(12,20,38,0.75); border: 1px solid var(--border); border-radius: 14px; padding: 16px; backdrop-filter: blur(10px); }
+.sens-card h4 { font-size: 14px; color: var(--primary); margin: 0 0 12px; }
+.sens-field { margin-bottom: 10px; }
+.sens-field label { display: block; font-size: 12px; color: var(--text-dim); margin-bottom: 4px; }
+.sens-field input, .sens-field select { width: 100%; padding: 7px 10px; border-radius: 8px; border: 1px solid var(--border); background: rgba(0,0,0,0.4); color: var(--text); font-size: 13px; }
+.sens-qda { display: flex; align-items: center; gap: 8px; }
+.sens-qda input[type=range] { flex: 1; }
+.sens-qda span { width: 34px; text-align: right; color: var(--primary); font-weight: 700; font-size: 13px; }
+.sens-table { width: 100%; font-size: 12px; border-collapse: collapse; }
+.sens-table th, .sens-table td { padding: 6px 8px; border-bottom: 1px solid rgba(255,255,255,0.06); text-align: left; }
+.sens-table th { color: var(--text-dim); font-weight: 600; }
+.sens-tag { display: inline-block; padding: 2px 8px; border-radius: 6px; font-size: 11px; }
+.sens-ok { background: rgba(0,255,136,0.15); color: var(--accent); }
+.sens-no { background: rgba(255,71,87,0.15); color: var(--danger); }
+.sens-btn { padding: 9px 18px; border-radius: 9px; border: 1px solid var(--primary); background: rgba(0,212,255,0.12); color: var(--primary); font-size: 13px; cursor: pointer; }
+.sens-btn:hover { background: rgba(0,212,255,0.22); }
+.sens-btn-danger { border-color: var(--danger); color: var(--danger); background: rgba(255,71,87,0.1); }
+</style>
+
+<div class="sens-wrap">
+  <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:10px;margin-bottom:14px;">
+    <div>
+      <h3 style="margin:0;font-size:18px;">{% if module == 'slice' %}切片·{% endif %}感官数据（四觉一体）</h3>
+      <div style="font-size:12px;color:var(--text-dim);margin-top:4px;">同一样本编号关联视觉 / 嗅觉 / 触觉理化 / 人工QDA评分，数据存 multimodal_data/ 与数据库{% if module == 'slice' %} · 切片模块：针对鲜切苹果切片样本（品类 apple_slice）{% endif %}</div>
+    </div>
+    <div style="display:flex;gap:8px;">
+      <button class="sens-btn" onclick="exportSensory()"><i class="fas fa-download"></i> 导出 CSV</button>
+      <button class="sens-btn" onclick="refreshSensory()"><i class="fas fa-sync-alt"></i> 刷新</button>
+    </div>
+  </div>
+
+  <div class="sens-grid">
+    <div class="sens-card">
+      <h4><i class="fas fa-plus-circle"></i> 录入 / 补录四觉数据</h4>
+      <div class="sens-field"><label>样本编号 sample_id（{% if module == 'slice' %}建议 SLICE-日期_序号{% else %}建议 日期_品类_序号{% endif %}）</label><input id="sid" placeholder="{% if module == 'slice' %}如 SLICE-20260806_001{% else %}如 20260806_apple_001{% endif %}"></div>
+      <div class="sens-field"><label>品类</label>
+        <select id="scat">{% if module == 'slice' %}<option value="apple_slice" selected>鲜切苹果切片 apple_slice</option>{% else %}<option value="apple">苹果 apple</option><option value="bread">面包 bread</option><option value="beverage">饮料 beverage</option>{% endif %}</select>
+      </div>
+      <div class="sens-field"><label>视觉文件名（multimodal_data/visual/ 下的图片名，可留空）</label><input id="sviz" placeholder="20260806_apple_001.jpg"></div>
+      <div class="sens-field"><label>气味 CSV 名（multimodal_data/odor/raw/ 下，可留空）</label><input id="sodor" placeholder="20260806_apple_001.csv"></div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;">
+        <div class="sens-field"><label>硬度 kg/cm2</label><input id="shard" type="number" step="0.01"></div>
+        <div class="sens-field"><label>重量 g</label><input id="sw" type="number" step="0.1"></div>
+        <div class="sens-field"><label>糖度 Brix</label><input id="sbrix" type="number" step="0.1"></div>
+        <div class="sens-field"><label>pH</label><input id="sph" type="number" step="0.01"></div>
+      <div class="sens-field"><label>可滴定酸度 TA %（NaOH 滴定）</label><input id="sta" type="number" step="0.01" placeholder="如 0.35"></div>
+      <div class="sens-field"><label>糖酸比 = Brix / TA</label><input id="ssar" type="number" step="0.1" placeholder="自动算或手填"></div>
+      <div class="sens-field"><label>维生素C mg/100g（可选）</label><input id="svc" type="number" step="0.1"></div>
+      <div style="font-size:12px;color:var(--text-dim);margin:10px 0 6px;">视觉量化指标（色差仪或图像提取，可选）</div>
+      <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;">
+        <div class="sens-field"><label>L* 亮度</label><input id="slab_l" type="number" step="0.1"></div>
+        <div class="sens-field"><label>a* 红绿</label><input id="slab_a" type="number" step="0.1"></div>
+        <div class="sens-field"><label>b* 黄蓝</label><input id="slab_b" type="number" step="0.1"></div>
+      </div>
+      <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;">
+        <div class="sens-field"><label>着色率 %</label><input id="scc" type="number" step="0.1"></div>
+        <div class="sens-field"><label>果径 mm</label><input id="sdia" type="number" step="0.1"></div>
+        <div class="sens-field"><label>果形指数</label><input id="sshape" type="number" step="0.01"></div>
+      </div>
+      <div style="font-size:12px;color:var(--text-dim);margin:10px 0 6px;">TPA 质构（质构仪，可选）</div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;">
+        <div class="sens-field"><label>弹性</label><input id="stpa_s" type="number" step="0.01"></div>
+        <div class="sens-field"><label>内聚性</label><input id="stpa_c" type="number" step="0.01"></div>
+        <div class="sens-field"><label>咀嚼性</label><input id="stpa_ch" type="number" step="0.1"></div>
+        <div class="sens-field"><label>出汁率 %</label><input id="sjuice" type="number" step="0.1"></div>
+      </div>
+      </div>
+      <div style="font-size:12px;color:var(--text-dim);margin:8px 0 6px;">人工 QDA 感官评分（1~9 分）</div>
+      <div class="sens-field"><label>评鉴人编号 panelist（QDA 多人评分用，可留空默认 default）</label><input id="spanelist" placeholder="如 P1 / P2"></div>
+      <div class="sens-field"><label>外观颜色</label><div class="sens-qda"><input type="range" id="qcolor" min="1" max="9" value="5" oninput="qcolorV.textContent=this.value"><span id="qcolorV">5</span></div></div>
+      <div class="sens-field"><label>气味</label><div class="sens-qda"><input type="range" id="qodor" min="1" max="9" value="5" oninput="qodorV.textContent=this.value"><span id="qodorV">5</span></div></div>
+      <div class="sens-field"><label>滋味</label><div class="sens-qda"><input type="range" id="qtaste" min="1" max="9" value="5" oninput="qtasteV.textContent=this.value"><span id="qtasteV">5</span></div></div>
+      <div class="sens-field"><label>质地</label><div class="sens-qda"><input type="range" id="qtexture" min="1" max="9" value="5" oninput="qtextureV.textContent=this.value"><span id="qtextureV">5</span></div></div>
+      <div class="sens-field"><label>总体接受度</label><div class="sens-qda"><input type="range" id="qoverall" min="1" max="9" value="5" oninput="qoverallV.textContent=this.value"><span id="qoverallV">5</span></div></div>
+      <div class="sens-field"><label>甜味强度</label><div class="sens-qda"><input type="range" id="qsweet" min="1" max="9" value="5" oninput="qsweetV.textContent=this.value"><span id="qsweetV">5</span></div></div>
+      <div class="sens-field"><label>酸味强度</label><div class="sens-qda"><input type="range" id="qsour" min="1" max="9" value="5" oninput="qsourV.textContent=this.value"><span id="qsourV">5</span></div></div>
+      <div class="sens-field"><label>涩味强度</label><div class="sens-qda"><input type="range" id="qastr" min="1" max="9" value="5" oninput="qastrV.textContent=this.value"><span id="qastrV">5</span></div></div>
+      <div class="sens-field"><label>果香强度</label><div class="sens-qda"><input type="range" id="qaroma" min="1" max="9" value="5" oninput="qaromaV.textContent=this.value"><span id="qaromaV">5</span></div></div>
+      <div class="sens-field"><label>脆度</label><div class="sens-qda"><input type="range" id="qcrisp" min="1" max="9" value="5" oninput="qcrispV.textContent=this.value"><span id="qcrispV">5</span></div></div>
+      <div class="sens-field"><label>多汁性</label><div class="sens-qda"><input type="range" id="qjuice" min="1" max="9" value="5" oninput="qjuiceV.textContent=this.value"><span id="qjuiceV">5</span></div></div>
+      <div class="sens-field"><label>标签</label>
+        <select id="slabel"><option value="">未标</option><option value="合格">合格</option><option value="不合格">不合格</option><option value="特级">特级</option><option value="一级">一级</option><option value="二级">二级</option></select>
+      </div>
+      <div class="sens-field"><label>备注</label><input id="sremark" placeholder="可选"></div>
+      <button class="sens-btn" style="width:100%;margin-top:4px;" onclick="saveSensory()"><i class="fas fa-save"></i> 保存 / 更新</button>
+      <div id="sensMsg" style="font-size:12px;color:var(--accent);margin-top:8px;min-height:16px;"></div>
+    </div>
+
+    <div class="sens-card" style="margin-top:16px;">
+      <h4><i class="fas fa-project-diagram"></i> 多模态融合（视觉 + 嗅觉 + 理化）</h4>
+      <div style="font-size:12px;color:var(--text-dim);margin-bottom:8px;">训练前确认 multimodal_data/ 下已放好：visual 图片、odor/raw 气味 CSV、touch/touch.csv、标签可放 manifest.csv 或由样本编号自动推断。</div>
+      <div class="sens-field"><label>样本编号 sample_id（预测用）</label><input id="fsid" placeholder="如 20260806_apple_001"></div>
+      <div style="display:flex;gap:8px;flex-wrap:wrap;">
+        <button class="sens-btn" onclick="trainFusion()" id="trainBtn"><i class="fas fa-brain"></i> 开始训练模型</button>
+        <button class="sens-btn" onclick="predictFusion()"><i class="fas fa-arrow-right"></i> 融合预测</button>
+      </div>
+      <div id="fusionMsg" style="font-size:12px;color:var(--accent);margin-top:8px;min-height:16px;"></div>
+      <div id="fusionResult" style="margin-top:8px;font-size:12px;"></div>
+    </div>
+
+    <div class="sens-card">
+      <h4><i class="fas fa-table"></i> 已录入记录（模态覆盖标记）</h4>
+      <div style="max-height:640px;overflow-y:auto;">
+        <table class="sens-table">
+          <thead><tr><th>样本</th><th>视觉</th><th>气味</th><th>硬度</th><th>糖度</th><th>QDA均值</th><th>明细</th><th>标签</th><th>操作</th></tr></thead>
+          <tbody id="sensBody"><tr><td colspan="9" style="color:var(--text-dim);">加载中...</td></tr></tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+var DEFCAT = "{{ default_category|default('') }}";
+if (DEFCAT) { document.getElementById('scat').value = DEFCAT; }
+function refreshSensory() {
+  fetch('/api/sensory/list' + (DEFCAT ? '?category=' + encodeURIComponent(DEFCAT) : '')).then(function(r){ return r.json(); }).then(function(d){
+    var tb = document.getElementById('sensBody');
+    if (!d.records || !d.records.length) { tb.innerHTML = '<tr><td colspan="9" style="color:var(--text-dim);">暂无记录，用左侧表单录入</td></tr>'; return; }
+    tb.innerHTML = d.records.map(function(x){
+      var tag = function(ok, txt){ return '<span class="sens-tag ' + (ok ? 'sens-ok' : 'sens-no') + '">' + txt + '</span>'; };
+      var qs = (d.qda_summary || {})[x.sample_id];
+      var qdaStr = '';
+      if (qs && qs.qda_overall) { qdaStr = qs.qda_overall.mean + (qs.qda_overall.std != null ? ' \u00b1 ' + qs.qda_overall.std : '') + ' (' + qs.n + ')'; }
+      else { var qda = [x.qda_color,x.qda_odor,x.qda_taste,x.qda_texture,x.qda_overall].filter(function(v){return v!=null;}); qdaStr = qda.length ? qda.map(function(v){return v.toFixed? v.toFixed(0):v;}).join('/') : ''; }
+      return '<tr>' +
+        '<td><b style="color:var(--primary);">' + x.sample_id + '</b><br><span style="font-size:10px;color:var(--text-dim);">' + (x.created_at||'') + '</span></td>' +
+        '<td>' + tag(!!x.visual_filename, x.visual_filename ? '有' : '无') + '</td>' +
+        '<td>' + tag(!!x.odor_csv, x.odor_csv ? '有' : '无') + '</td>' +
+        '<td>' + (x.hardness != null ? x.hardness : '-') + '</td>' +
+        '<td>' + (x.brix != null ? x.brix : '-') + '</td>' +
+        '<td>' + (qdaStr || '-') + '</td>' +'<td style=\'text-align:center;\'>' + (qs ? '<button class=\'sens-btn\' style=\'padding:3px 8px;font-size:10px;\' onclick=\'qdaDetail(\'' + x.sample_id + '\')\'>\u660e\u7ec6</button>' : '-') + '</td>' +
+        '<td>' + (x.label || '-') + '</td>' +
+        '<td><button class="sens-btn sens-btn-danger" style="padding:4px 10px;font-size:11px;" onclick="delSensory(' + x.id + ')">删</button></td>' +
+        '</tr>';
+    }).join('');
+  });
+}
+function saveSensory() {
+  var body = {
+    sample_id: document.getElementById('sid').value.trim(),
+    category: document.getElementById('scat').value,
+    visual_filename: document.getElementById('sviz').value.trim(),
+    odor_csv: document.getElementById('sodor').value.trim(),
+    hardness: document.getElementById('shard').value,
+    weight_g: document.getElementById('sw').value,
+    brix: document.getElementById('sbrix').value,
+    ph: document.getElementById('sph').value,
+    lab_l: document.getElementById('slab_l').value,
+    lab_a: document.getElementById('slab_a').value,
+    lab_b: document.getElementById('slab_b').value,
+    color_coverage: document.getElementById('scc').value,
+    fruit_diameter_mm: document.getElementById('sdia').value,
+    shape_index: document.getElementById('sshape').value,
+    ta: document.getElementById('sta').value,
+    sugar_acid_ratio: document.getElementById('ssar').value,
+    vitamin_c: document.getElementById('svc').value,
+    tpa_springiness: document.getElementById('stpa_s').value,
+    tpa_cohesiveness: document.getElementById('stpa_c').value,
+    tpa_chewiness: document.getElementById('stpa_ch').value,
+    juice_pct: document.getElementById('sjuice').value,
+    qda_sweet: document.getElementById('qsweet').value,
+    qda_sour: document.getElementById('qsour').value,
+    qda_astringent: document.getElementById('qastr').value,
+    qda_aroma: document.getElementById('qaroma').value,
+    qda_crispness: document.getElementById('qcrisp').value,
+    qda_juiciness: document.getElementById('qjuice').value,
+    panelist: document.getElementById('spanelist').value.trim(),
+    qda_color: document.getElementById('qcolor').value,
+    qda_odor: document.getElementById('qodor').value,
+    qda_taste: document.getElementById('qtaste').value,
+    qda_texture: document.getElementById('qtexture').value,
+    qda_overall: document.getElementById('qoverall').value,
+    label: document.getElementById('slabel').value,
+    remark: document.getElementById('sremark').value.trim()
+  };
+  if (!body.sample_id) { alert('请填写样本编号'); return; }
+  fetch('/api/sensory/save', { method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify(body) })
+    .then(function(r){ return r.json(); }).then(function(d){
+      document.getElementById('sensMsg').textContent = d.ok ? '已保存 ✓' : ('失败: ' + (d.error||''));
+      if (d.ok) refreshSensory();
+    });
+}
+function qdaDetail(sid) {
+  fetch('/api/sensory/qda-detail?sample_id=' + encodeURIComponent(sid)).then(function(r){ return r.json(); }).then(function(d){
+    if (!d.ok || !d.entries || !d.entries.length) { alert('\u65e0 QDA \u8bc4\u5206'); return; }
+    var rows = d.entries.map(function(e){
+      return '<tr><td>' + e.panelist + '</td><td>' + [e.qda_color,e.qda_odor,e.qda_taste,e.qda_texture,e.qda_overall].filter(function(v){return v!=null;}).join('/') + '</td><td>' + (e.qda_overall||'-') + '</td><td><button class=\'sens-btn sens-btn-danger\' style=\'padding:2px 8px;font-size:10px;\' onclick=\'delQda(' + e.id + ')\'>\u5220</button></td></tr>';
+    }).join('');
+    var win = window.open('', '_blank', 'width=480,height=420');
+    if (win) { win.document.write('<title>QDA - ' + sid + '</title><body style=\'background:#0c1426;color:#e6f1ff;font-family:sans-serif;\'><h3>QDA \u8bc4\u5206\u660e\u7ec6 - ' + sid + '</h3><table border=\'1\' cellpadding=\'6\' style=\'border-collapse:collapse;\'><tr><th>\u8bc4\u9274\u4eba</th><th>\u8272/\u6c14/\u5473/\u8d28/\u603b</th><th>\u603b\u4f53</th><th>\u64cd\u4f5c</th></tr>' + rows + '</table></body>'); win.document.close(); }
+    else { alert('\u8bf7\u5141\u8bb8\u5f39\u7a97\uff1a' + rows); }
+  });
+}
+function delQda(id) {
+  if (!confirm('\u5220\u9664\u8fd9\u6761 QDA \u8bc4\u5206\uff1f')) return;
+  fetch('/api/sensory/delete-qda', { method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify({id:id}) }).then(function(r){ return r.json(); }).then(function(d){ if (d.ok) refreshSensory(); });
+}
+function delSensory(id) {
+  if (!confirm('删除该条感官记录？')) return;
+  fetch('/api/sensory/delete', { method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify({id:id}) })
+    .then(function(r){ return r.json(); }).then(function(d){ if (d.ok) refreshSensory(); });
+}
+function exportSensory() {
+  fetch('/api/sensory/export', { method: 'POST' }).then(function(r){ return r.blob(); }).then(function(b){
+    var a = document.createElement('a'); a.href = URL.createObjectURL(b); a.download = 'sensory_records.csv'; a.click();
+  });
+}
+function trainFusion() {
+  var btn = document.getElementById('trainBtn');
+  if (!btn) return;
+  btn.disabled = true; btn.innerHTML = '<i class=\'fas fa-spinner fa-spin\'></i> \u8bad\u7ec3\u4e2d...';
+  document.getElementById('fusionMsg').textContent = '\u8bad\u7ec3\u4e2d\uff0c\u8bf7\u7a0d\u5019\uff08\u53ef\u80fd\u9700\u8981\u63d0\u53d6\u56fe\u50cf\u7279\u5f81\uff09...';
+  fetch('/api/sensory/train', { method: 'POST' })
+    .then(function(r){ return r.json(); })
+    .then(function(d){
+      btn.disabled = false; btn.innerHTML = '<i class=\'fas fa-brain\'></i> \u5f00\u59cb\u8bad\u7ec3\u6a21\u578b';
+      if (!d.ok) { document.getElementById('fusionMsg').textContent = '\u5931\u8d25: ' + (d.error||''); return; }
+      document.getElementById('fusionMsg').textContent = '\u8bad\u7ec3\u5b8c\u6210 \u2713';
+      var rp = d.report || {};
+      var html = '<table class=\'sens-table\'><tr><th>\u6a21\u6001</th><th>\u6837\u672c\u6570</th><th>\u51c6\u786e\u7387</th><th>\u6807\u7b7e\u7c7b</th></tr>';
+      var rows = [['\u89c6\u89c9', rp.visual], ['\u55c5\u89c9', rp.odor], ['\u7406\u5316', rp.phys]];
+      rows.forEach(function(r){ var v = r[1]; if (v && v.acc != null) { html += '<tr><td>' + r[0] + '</td><td>' + v.n + '</td><td>' + v.acc + '%</td><td>' + (rp.n_labels||0) + '</td></tr>'; if (v.per_class) { var pc = Object.keys(v.per_class).map(function(c){ return c + ': n=' + v.per_class[c].support + ' f1=' + v.per_class[c].f1; }).join(' / '); html += '<tr><td colspan=\'4\' style=\'color:var(--text-dim);font-size:10px;\'>' + pc + '</td></tr>'; } } });
+      if (rp.fusion && rp.fusion.concat) { html += '<tr><td>\u878d\u5408 concat</td><td>' + rp.fusion.concat.n + '</td><td>' + rp.fusion.concat.acc + '%</td><td></td></tr>'; var pc = rp.fusion.concat.per_class; if (pc) { var s2 = Object.keys(pc).map(function(c){ return c + ': n=' + pc[c].support + ' f1=' + pc[c].f1; }).join(' / '); html += '<tr><td colspan=\'4\' style=\'color:var(--text-dim);font-size:10px;\'>' + s2 + '</td></tr>'; } }
+      if (rp.fusion && rp.fusion.late) html += '<tr><td>\u878d\u5408 late</td><td>' + rp.fusion.late.n + '</td><td>' + rp.fusion.late.acc + '%</td><td></td></tr>';
+      html += '</table>';
+      document.getElementById('fusionResult').innerHTML = html;
+    }).catch(function(e){ btn.disabled = false; document.getElementById('fusionMsg').textContent = '\u7f51\u7edc\u9519\u8bef: ' + e; });
+}
+function predictFusion() {
+  var sid = document.getElementById('fsid').value.trim();
+  if (!sid) { alert('\u8bf7\u586b\u5199\u6837\u672c\u7f16\u53f7'); return; }
+  document.getElementById('fusionMsg').textContent = '\u9884\u6d4b\u4e2d...';
+  fetch('/api/sensory/fusion-predict', { method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify({sample_id: sid}) })
+    .then(function(r){ return r.json(); })
+    .then(function(d){
+      if (!d.ok) { document.getElementById('fusionMsg').textContent = '\u5931\u8d25: ' + (d.error||''); return; }
+      document.getElementById('fusionMsg').textContent = '';
+      var html = '<div style=\'color:var(--primary);font-weight:700;margin-bottom:6px;\'>\u6837\u672c ' + sid + '</div>';
+      var names = {'visual':'\u89c6\u89c9', 'odor':'\u55c5\u89c9', 'phys':'\u7406\u5316'};
+      html += '<table class=\'sens-table\'><tr><th>\u6a21\u6001</th><th>\u9884\u6d4b</th><th>\u7f6e\u4fe1\u5ea6</th></tr>';
+      Object.keys(d.modalities || {}).forEach(function(k){ var m = d.modalities[k]; html += '<tr><td>' + (names[k]||k) + '</td><td>' + (m.available ? m.prediction : '\u65e0\u6570\u636e') + '</td><td>' + (m.confidence != null ? (m.confidence*100).toFixed(1) + '%' : '-') + '</td></tr>'; });
+      if (d.fusion) html += '<tr style=\'color:var(--accent);font-weight:700;\'><td>\u878d\u5408\u7ed3\u679c</td><td>' + d.fusion.prediction + '</td><td>' + (d.fusion.confidence*100).toFixed(1) + '%</td></tr>';
+      html += '</table>';
+      document.getElementById('fusionResult').innerHTML = html;
+    }).catch(function(e){ document.getElementById('fusionMsg').textContent = '\u7f51\u7edc\u9519\u8bef: ' + e; });
+}
+refreshSensory();
+</script>
+{% endblock %}

@@ -1,0 +1,186 @@
+{% extends "base.html" %}
+{% block title %}产线模式{% endblock %}
+{% block content %}
+<style>
+  .ind-hero { display:flex; align-items:center; gap:14px; flex-wrap:wrap; margin-bottom:14px; }
+  .ind-status { display:inline-flex; align-items:center; gap:8px; padding:6px 14px; border-radius:20px; font-size:13px; font-weight:600; border:1px solid var(--border); background:rgba(0,0,0,0.35); }
+  .ind-status .dot { width:10px; height:10px; border-radius:50%; }
+  .ind-running .dot { background:var(--accent); box-shadow:0 0 8px var(--accent); animation:indPulse 1s infinite; }
+  .ind-stopped .dot { background:var(--danger); }
+  @keyframes indPulse { 0%,100%{opacity:1;} 50%{opacity:0.3;} }
+  .ind-cards { display:grid; grid-template-columns:repeat(auto-fit,minmax(150px,1fr)); gap:10px; margin-bottom:14px; }
+  .ind-card { padding:12px 14px; border-radius:10px; border:1px solid var(--border); background:rgba(0,0,0,0.3); }
+  .ind-card .v { font-size:22px; font-weight:700; font-family:Consolas,monospace; color:var(--text); }
+  .ind-card .k { font-size:11px; color:var(--text-dim); margin-top:2px; }
+  .ind-card .ok .v { color:var(--accent); } .ind-card .bad .v { color:var(--danger); }
+  .ind-stream { display:grid; grid-template-columns:repeat(auto-fill,minmax(90px,1fr)); gap:8px; margin-bottom:14px; min-height:70px; }
+  .ind-tile { border-radius:8px; padding:8px; text-align:center; font-size:11px; border:1px solid var(--border); background:rgba(0,0,0,0.35); animation:indIn .3s; }
+  @keyframes indIn { from{opacity:0;transform:translateY(6px);} to{opacity:1;} }
+  .ind-tile .g { font-weight:700; font-size:13px; margin-bottom:2px; }
+  .ind-ctrl { display:flex; gap:10px; align-items:center; flex-wrap:wrap; margin-bottom:14px; padding:12px; border:1px solid var(--border); border-radius:10px; background:rgba(0,0,0,0.25); }
+  .ind-ctrl select, .ind-ctrl input { padding:5px 10px; border-radius:6px; border:1px solid var(--border); background:rgba(0,0,0,0.7); color:var(--text); font-size:12px; }
+  .ind-log { width:100%; border-collapse:collapse; font-size:12px; }
+  .ind-log th { text-align:left; color:var(--text-dim); font-weight:600; padding:6px 8px; border-bottom:1px solid var(--border); }
+  .ind-log td { padding:6px 8px; border-bottom:1px solid rgba(255,255,255,0.05); font-family:Consolas,monospace; }
+  .act-ok { color:var(--accent); font-weight:700; } .act-reject { color:var(--danger); font-weight:700; }
+  .ind-note { font-size:11px; color:var(--text-dim); line-height:1.7; margin-top:14px; padding:10px 12px; border:1px dashed var(--border); border-radius:8px; }
+</style>
+
+<div class="panel">
+  <div class="panel-head">
+    <span class="t"><i class="fas fa-industry"></i> 产线模式（模拟分拣）</span>
+    <span class="hint-text">模拟传送带 · 多面融合 · 实时分拣看板</span>
+  </div>
+  <div class="panel-body">
+
+    <div class="ind-hero">
+      <div id="indStatus" class="ind-status ind-stopped"><span class="dot"></span><span id="indStatusText">已停止</span></div>
+      <span id="indWarming" style="display:none;font-size:12px;color:var(--warning);"><i class="fas fa-spinner fa-spin"></i> 模型预热中（首次加载约 10 秒），之后开始出果…</span>
+      <div style="font-size:12px;color:var(--text-dim);">图片池：<b id="poolInfo" style="color:var(--text);">扫描中…</b></div>
+    </div>
+
+    <div class="ind-ctrl">
+      <button id="indStartBtn" class="btn-a btn-sm2" onclick="indStart()"><i class="fas fa-play"></i> 启动产线</button>
+      <button id="indStopBtn" class="btn-d btn-sm2" onclick="indStop()" disabled><i class="fas fa-stop"></i> 停止</button>
+      <button class="btn-p btn-sm2" onclick="indSingle()"><i class="fas fa-step-forward"></i> 单步检测 1 颗</button>
+      <label style="font-size:12px;color:var(--text-dim);">节拍:
+        <select id="indSpeed" onchange="indSpeedTip()">
+          <option value="0.5">0.5 颗/秒</option>
+          <option value="1">1 颗/秒（慢速线）</option>
+          <option value="2" selected>2 颗/秒</option>
+          <option value="5">5 颗/秒（中速线）</option>
+          <option value="10">10 颗/秒（高速线）</option>
+        </select>
+      </label>
+      <label style="font-size:12px;color:var(--text-dim);">每颗面数:
+        <select id="indFaces">
+          <option value="2">2 面（正/背）</option>
+          <option value="3" selected>3 面（推荐）</option>
+          <option value="4">4 面</option>
+        </select>
+      </label>
+      <span id="indSpeedTip" style="font-size:11px;color:var(--warning);"></span>
+    </div>
+
+    <div class="ind-cards">
+      <div class="ind-card"><div class="v" id="stTotal">0</div><div class="k">已检（颗）</div></div>
+      <div class="ind-card ok"><div class="v" id="stOk">0</div><div class="k">合格</div></div>
+      <div class="ind-card bad"><div class="v" id="stReject">0</div><div class="k">不合格（剔除）</div></div>
+      <div class="ind-card"><div class="v" id="stOkRatio">--</div><div class="k">合格率</div></div>
+      <div class="ind-card"><div class="v" id="stLatency">--</div><div class="k">平均耗时 ms</div></div>
+      <div class="ind-card"><div class="v" id="stConsistent">--</div><div class="k">多面一致率</div></div>
+      <div class="ind-card"><div class="v" id="stSession">0s</div><div class="k">会话时长</div></div>
+    </div>
+
+    <div style="font-size:12px;color:var(--text-dim);margin-bottom:6px;"><i class="fas fa-arrow-right"></i> 最近分拣流（绿色=放行，红色=剔除）</div>
+    <div class="ind-stream" id="indStream"><span style="font-size:12px;color:var(--text-dim);align-self:center;">启动后这里会实时滚动</span></div>
+
+    <div style="overflow-x:auto;max-height:340px;overflow-y:auto;border:1px solid var(--border);border-radius:8px;">
+      <table class="ind-log">
+        <thead><tr><th>时间</th><th>苹果ID</th><th>综合等级</th><th>缺陷占比</th><th>面数</th><th>一致性</th><th>动作</th><th>耗时ms</th></tr></thead>
+        <tbody id="indLogBody"><tr><td colspan="8" style="color:var(--text-dim);text-align:center;">暂无记录</td></tr></tbody>
+      </table>
+    </div>
+
+    <div class="ind-note">
+      <i class="fas fa-info-circle" style="color:var(--primary);"></i> <b>产线模拟模式说明：</b>
+      模拟传送带定时触发 → 图片池随机取 2~4 张作为「同一苹果的多面」→ 逐面四模型检测 → 取最差判定（任何一面有缺陷即剔除，防漏检）。
+      统计为会话级（不写入历史库，避免污染真实数据）；真实产线的漏检率/误检率需用人工抽检标定。
+      真实硬件对接（光电触发/工业相机/PLC/分拣执行）接口已预留，详见 <code>docs/工业产线模式设计方案.md</code>。
+    </div>
+
+  </div>
+</div>
+
+<script>
+var indTimer = null;
+function indStart() {
+  var fd = { speed: parseFloat(document.getElementById('indSpeed').value),
+             faces_per_apple: parseInt(document.getElementById('indFaces').value) };
+  fetch('/api/industrial/start', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify(fd) })
+    .then(function(r){ return r.json(); })
+    .then(function(d){ if (d.error) { alert(d.error); return; } indSetRunning(true); });
+}
+function indStop() {
+  fetch('/api/industrial/stop', { method:'POST' }).then(function(){ indSetRunning(false); });
+}
+function indSingle() {
+  var faces = parseInt(document.getElementById('indFaces').value);
+  fetch('/api/industrial/single', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({faces_per_apple: faces}) })
+    .then(function(r){ return r.json(); })
+    .then(function(d){ if (d.stats) indRender(d.stats); });
+}
+function indSetRunning(on) {
+  var st = document.getElementById('indStatus');
+  st.className = 'ind-status ' + (on ? 'ind-running' : 'ind-stopped');
+  document.getElementById('indStatusText').textContent = on ? '产线运行中' : '已停止';
+  document.getElementById('indStartBtn').disabled = on;
+  document.getElementById('indStopBtn').disabled = !on;
+}
+function indSpeedTip() {
+  var sp = parseFloat(document.getElementById('indSpeed').value);
+  var tip = document.getElementById('indSpeedTip');
+  if (sp >= 5) tip.textContent = '提示：高速档下检测耗时可能成为瓶颈，看平均耗时列';
+  else tip.textContent = '';
+}
+function indBad(g) {
+  return String(g).indexOf('不合格') >= 0 || String(g).indexOf('Reject') >= 0 || String(g).indexOf('残次') >= 0;
+}
+function indColor(g) {
+  if (indBad(g)) return '#ff4757';
+  if (String(g).indexOf('特级') >= 0 || String(g).indexOf('Premium') >= 0) return '#00ff88';
+  if (String(g).indexOf('二级') >= 0) return '#ffd166';
+  return '#0dd9ff';
+}
+function indRender(s) {
+  document.getElementById('stTotal').textContent = s.total || 0;
+  document.getElementById('stOk').textContent = s.ok || 0;
+  document.getElementById('stReject').textContent = s.reject || 0;
+  document.getElementById('stOkRatio').textContent = s.total ? (s.ok_ratio * 100).toFixed(1) + '%' : '--';
+  document.getElementById('stLatency').textContent = s.avg_latency_ms ? s.avg_latency_ms.toFixed(0) : '--';
+  document.getElementById('stConsistent').textContent = s.total ? (s.consistent_ratio * 100).toFixed(0) + '%' : '--';
+  var sec = s.session_seconds || 0;
+  document.getElementById('stSession').textContent = (sec >= 60 ? Math.floor(sec/60) + 'm' : '') + (sec % 60) + 's';
+  indSetRunning(!!s.running);
+  var w = document.getElementById('indWarming');
+  if (s.warming) { w.style.display = 'inline'; } else { w.style.display = 'none'; }
+  // 分拣流
+  var logs = s.logs || [];
+  var stream = document.getElementById('indStream');
+  if (logs.length) {
+    var html = '';
+    logs.slice(0, 12).forEach(function(l){
+      var c = indColor(l.grade);
+      html += '<div class="ind-tile" style="border-color:' + c + '55;">' +
+        '<div class="g" style="color:' + c + ';">' + l.grade + '</div>' +
+        '<div>' + l.apple_id + '</div><div>' + l.ratio + '</div>' +
+        '<div style="color:' + (l.action === 'REJECT' ? 'var(--danger)' : 'var(--accent)') + ';font-weight:700;">' + l.action + '</div></div>';
+    });
+    stream.innerHTML = html;
+  }
+  // 日志表
+  var tb = document.getElementById('indLogBody');
+  if (logs.length) {
+    tb.innerHTML = logs.map(function(l){
+      var c = indColor(l.grade);
+      return '<tr><td>' + l.ts + '</td><td>' + l.apple_id + '</td>' +
+        '<td style="color:' + c + ';font-weight:700;">' + l.grade + '</td>' +
+        '<td>' + l.ratio + '</td><td>' + l.faces + '</td>' +
+        '<td style="color:' + (l.consistent ? 'var(--accent)' : 'var(--warning)') + ';">' + (l.consistent ? '一致' : '不一致') + '</td>' +
+        '<td class="' + (l.action === 'REJECT' ? 'act-reject' : 'act-ok') + '">' + l.action + '</td>' +
+        '<td>' + l.latency_ms.toFixed(0) + '</td></tr>';
+    }).join('');
+  }
+}
+function indPoll() { fetch('/api/industrial/stats').then(function(r){ return r.json(); }).then(indRender).catch(function(){}); }
+function indPoolInfo() {
+  fetch('/api/industrial/stats').then(function(r){ return r.json(); }).then(function(){});
+}
+document.addEventListener('DOMContentLoaded', function(){
+  indTimer = setInterval(indPoll, 1000);
+  indPoll();
+  indSpeedTip();
+  fetch('/api/industrial/stats').then(function(r){return r.json();}).then(function(){});
+});
+</script>
+{% endblock %}

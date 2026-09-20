@@ -1,5 +1,5 @@
 {% extends "base.html" %}
-{% block title %}批量标注{% endblock %}
+{% block title %}{% if module == 'slice' %}切片·{% endif %}批量标注{% endblock %}
 {% block content %}
 <style>
 .annot-wrap { max-width: 900px; margin: 0 auto; }
@@ -24,12 +24,16 @@
 
 <div class="annot-wrap">
   <div class="annot-head">
-    <h4 style="color:var(--text);margin:0;"><i class="fas fa-tags"></i> 批量标注</h4>
+    <h4 style="color:var(--text);margin:0;"><i class="fas fa-tags"></i> {% if module == 'slice' %}切片·{% endif %}批量标注</h4>
     <div class="annot-progress">剩余 <b id="remain">--</b> 张未标注图片</div>
     <select id="annotCat" style="background:rgba(10,16,30,0.9);color:var(--text);border:1px solid var(--border);border-radius:8px;padding:6px 10px;font-size:13px;">
+      {% if module == 'slice' %}
+      <option value="apple_slice">🍎 苹果切片</option>
+      {% else %}
       <option value="apple">🍎 苹果</option>
       <option value="bread">🍞 面包</option>
       <option value="beverage">🥤 饮料</option>
+      {% endif %}
     </select>
     <a href="/dataset" class="btn btn-sm" style="border:1px solid var(--primary);color:var(--primary);background:rgba(0,212,255,0.08);">查看数据集</a>
   </div>
@@ -37,17 +41,20 @@
   <div id="annotArea">
     <div class="annot-empty">
       <div class="big">📭</div>
-      <div>没有待标注图片。到监测页检测后点击"保存到数据集"选"未分类"，图片会进入这里。</div>
+      <div>没有待标注图片。检测结果被标记为"待复核"时图片会自动进入这里；也可以到监测页检测后点"保存到数据集"。</div>
     </div>
   </div>
 </div>
 
 <script>
+var DEFCAT = "{{ default_category|default('') }}";
 var curItem = null;
-var categoryNames = {apple: "苹果", bread: "面包", beverage: "饮料"};
+var categoryNames = {apple: "苹果", bread: "面包", beverage: "饮料", apple_slice: "苹果切片"};
 
 function loadQueue(first) {
-  fetch("/api/annotate/queue")
+  var url = "/api/annotate/queue";
+  if (DEFCAT) url += "?category=" + DEFCAT;
+  fetch(url)
     .then(function(r) { return r.json(); })
     .then(function(d) {
       document.getElementById("remain").textContent = d.count;
@@ -64,9 +71,13 @@ function loadQueue(first) {
 
 function renderItem() {
   if (!curItem) { loadQueue(true); return; }
-  var cat = document.getElementById("annotCat").value;
+  var cat = DEFCAT || document.getElementById("annotCat").value;
+  var reviewBadge = curItem.from_review
+    ? '<div style="margin-top:10px;text-align:center;"><span style="background:rgba(255,193,7,0.14);color:var(--warning);border:1px solid var(--warning);padding:4px 14px;border-radius:20px;font-size:12px;"><i class="fas fa-user-check"></i> 来自检测复核 · 保存后将同步修正历史记录并清除待复核标记</span></div>'
+    : '';
   document.getElementById("annotArea").innerHTML =
     '<div class="annot-img-box"><img src="/dataset_collected/' + curItem.path + '?t=' + Date.now() + '" alt="待标注图片"></div>' +
+    reviewBadge +
     '<div class="annot-btns">' +
       '<button class="annot-btn btn-good" onclick="doLabel(\'合格\')">✅ 合格<span class="k">快捷键 1</span></button>' +
       '<button class="annot-btn btn-bad" onclick="doLabel(\'不合格\')">❌ 不合格<span class="k">快捷键 2</span></button>' +
@@ -76,13 +87,14 @@ function renderItem() {
 
 function doLabel(label) {
   if (!curItem) return;
-  var cat = document.getElementById("annotCat").value;
+  var cat = DEFCAT || document.getElementById("annotCat").value;
   fetch("/api/annotate/save", {method:"POST", headers:{"Content-Type":"application/json"},
     body: JSON.stringify({src: curItem.path, category: cat, label: label})})
     .then(function(r) { return r.json(); })
     .then(function(d) {
       if (d.success) {
         document.getElementById("remain").textContent = d.remaining;
+        if (d.synced) showAnnotMsg("已同步修正历史记录等级，并清除待复核标记");
         curItem = null;
         loadQueue(false);
       } else alert(d.error || "保存失败");
@@ -90,10 +102,19 @@ function doLabel(label) {
     .catch(function(e) { alert("保存失败: " + e); });
 }
 
+function showAnnotMsg(text) {
+  var el = document.getElementById("annotMsg");
+  var area = document.getElementById("annotArea");
+  if (!el) { el = document.createElement("div"); el.id = "annotMsg"; area.parentNode.insertBefore(el, area); }
+  el.innerHTML = '<div style="background:rgba(0,255,136,0.1);border:1px solid var(--accent);color:var(--accent);padding:8px 14px;border-radius:10px;font-size:13px;margin-bottom:12px;"><i class="fas fa-check-circle"></i> ' + text + '</div>';
+  setTimeout(function(){ if (el) el.innerHTML = ""; }, 4000);
+}
 function doSkip() {
   if (!curItem) return;
+  var skipBody = {src: curItem.path};
+  if (DEFCAT) skipBody.category = DEFCAT;
   fetch("/api/annotate/skip", {method:"POST", headers:{"Content-Type":"application/json"},
-    body: JSON.stringify({src: curItem.path})})
+    body: JSON.stringify(skipBody)})
     .then(function(r) { return r.json(); })
     .then(function(d) {
       if (d.success) {
@@ -113,11 +134,13 @@ document.addEventListener("keydown", function(e) {
 });
 
 (function() {
+  if (DEFCAT) { document.getElementById("annotCat").value = DEFCAT; return; }
   var saved = localStorage.getItem("category") || "apple";
   if (["apple","bread","beverage"].indexOf(saved) === -1) saved = "apple";
   document.getElementById("annotCat").value = saved;
 })();
 document.getElementById("annotCat").addEventListener("change", function() {
+  if (DEFCAT) return;
   localStorage.setItem("category", this.value);
   switchCategory(this.value);
 });
