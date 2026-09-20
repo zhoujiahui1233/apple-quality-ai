@@ -1,9 +1,13 @@
 __pycache__/
 *.pyc
-output/
 .DS_Store
 venv/
 .env
+.env.*
+# 含真实密钥的本地配置；模板文件 vlm_config.example.json 保留
+vlm_config.json
+*_secret.json
+*_credentials.json
 logs/
 backups/
 instance/
@@ -27,3 +31,45 @@ yolo_detect_output/
 yolo_output/
 archive/
 model_backups/
+
+# ─────────────────────────────────────────────────────────────
+# 图片素材与派生数据集：体积大，不进 git，走独立离线备份
+#   （保留其中的文本标注/清单，只排除图片二进制）
+# ─────────────────────────────────────────────────────────────
+dl_dataset_clean/
+defect_dataset_clean/
+defect_dataset_v2/
+defect_dataset_yolo/
+defect_label/
+dataset_collected_augmented/
+auto_label_output/*.jpg
+漏检样本/
+clean_dataset_v1/*.npz
+teacher_dataset/images/
+defect_annotate/images/
+vlm_seed_400/images/
+vlm_seed_400/out/viz/
+
+# 参考书扫描件（137 MB）、第三方标注工具源码（可重新下载）
+book/
+LabelImg/
+
+# Ultralytics 运行时配置（含本机绝对路径）
+Ultralytics/
+
+# 独立子项目（自带 .git），不纳入本仓库
+label-compliance/
+
+# LibreOffice 转换产生的临时配置与日志
+docs/_qa_manual/lo_profile/
+docs/_qa_manual/*.log
+
+# ─────────────────────────────────────────────────────────────
+# output/：只收实验数值结果（论文用），不收可视化图片
+# ─────────────────────────────────────────────────────────────
+output/**
+!output/**/
+!output/**/*.csv
+!output/**/*.json
+!output/**/*.txt
+!output/**/*.html

@@ -16,7 +16,9 @@
 import argparse
 import csv
 import json
+import math
 import sys
+import time
 from datetime import datetime
 from pathlib import Path
 
@@ -71,6 +73,54 @@ def iter_samples(category: str, limit: int):
                 yield f, yb, y3
 
 
+def _score_svm(img_p):
+    """SVM 决策值 -> 优质概率分数（供 ROC/AUC）"""
+    from apple_defect_detector import load_scaler, load_svm_model, extract_features_v2
+    try:
+        model = load_svm_model()
+        scaler = load_scaler()
+        if model is None:
+            return None
+        feats = extract_features_v2(img_p)
+        if feats is None:
+            return None
+        if scaler is not None:
+            feats = scaler.transform(feats.reshape(1, -1)).flatten()
+        _, dist = model.predict(np.array([feats], dtype=np.float32),
+                                flags=cv2.ml.STAT_MODEL_RAW_OUTPUT)
+        d = float(dist[0, 0])
+        return 1.0 / (1.0 + math.exp(-d))
+    except Exception:
+        return None
+
+
+def _score_rf(img_p):
+    """随机森林 predict_proba -> 优质概率分数"""
+    from apple_defect_detector import load_rf_model, extract_features_v2
+    try:
+        model = load_rf_model()
+        if model is None:
+            return None
+        feats = extract_features_v2(img_p)
+        if feats is None:
+            return None
+        proba = model.predict_proba(np.array([feats], dtype=np.float32))[0]
+        return float(proba[0])
+    except Exception:
+        return None
+
+
+def _conf_to_score(conf, binary):
+    """DL/YOLO 的 top1 置信度 -> 优质概率分数（避免二次推理）"""
+    if conf is None or binary is None:
+        return None
+    try:
+        conf = float(conf)
+    except Exception:
+        return None
+    return conf if binary == "good" else 1.0 - conf
+
+
 def run_apple(f, yb, y3):
     from apple_defect_detector import (
         preprocess, segment_apple, detect_defects, classify_quality,
@@ -83,27 +133,43 @@ def run_apple(f, yb, y3):
     mask, contour = segment_apple(img_p)
     if mask is None:
         return None
-    row = {"svm": None, "rf": None, "dl": None, "yolo": None, "pipeline3": None}
+    row = {"svm": None, "rf": None, "dl": None, "yolo": None, "pipeline3": None,
+           "scores": {}, "latency": {}}
+    _t = time.perf_counter()
     try:
         g, _, _ = predict_with_svm(img_p, mask, contour)
         row["svm"] = model_binary(g)
     except Exception:
         pass
+    row["latency"]["svm"] = (time.perf_counter() - _t) * 1000
+    row["scores"]["svm"] = _score_svm(img_p)
+
+    _t = time.perf_counter()
     try:
         g, _, _ = predict_with_rf(img_p, mask, contour)
         row["rf"] = model_binary(g)
     except Exception:
         pass
+    row["latency"]["rf"] = (time.perf_counter() - _t) * 1000
+    row["scores"]["rf"] = _score_rf(img_p)
+
+    _t = time.perf_counter()
     try:
-        g, _, _, _ = predict_with_dl(img_p)
+        g, _, conf, _ = predict_with_dl(img_p)
         row["dl"] = model_binary(g)
+        row["scores"]["dl"] = _conf_to_score(conf, row["dl"])
     except Exception:
         pass
+    row["latency"]["dl"] = (time.perf_counter() - _t) * 1000
+
+    _t = time.perf_counter()
     try:
-        g, _, _, _ = predict_with_yolo(img_p)
+        g, _, conf, _ = predict_with_yolo(img_p)
         row["yolo"] = model_binary(g)
+        row["scores"]["yolo"] = _conf_to_score(conf, row["yolo"])
     except Exception:
         pass
+    row["latency"]["yolo"] = (time.perf_counter() - _t) * 1000
     # 管线三级分级
     try:
         dm, dc = detect_defects(img_p, mask)
@@ -160,28 +226,8 @@ def main():
         if not rows:
             continue
 
-        cat_sum = {"n": len(rows), "grade_accuracy": None}
-        if cat == "apple":
-            from services.stats_service import model_comparison_table
-            preds = []
-            for m in ["svm", "rf", "dl", "yolo"]:
-                ys = [r[m] for r in rows if r[m] is not None]
-                yt = [r["y_true"] for r in rows if r[m] is not None]
-                preds.append({"name": m, "y_pred": ys, "y_true": yt})
-            table = model_comparison_table(preds)
-            cat_sum["models"] = [
-                {"name": m["name"], "accuracy": round(m["accuracy"] * 100, 2),
-                 "precision": [round(x, 3) for x in m["precision"]],
-                 "recall": [round(x, 3) for x in m["recall"]],
-                 "f1": [round(x, 3) for x in m["f1"]], "n": len(m["cm"][0])}
-                for m in table["models"]
-            ]
-            cat_sum["mcnemar"] = table["mcnemar"]
-        # 管线分级准确率（二分类：premium/standard -> good）
-        g3_ok = [1 for r in rows
-                 if (r["pipeline3"] in ("premium", "standard")) == (r["y_true"] == "good")]
-        if g3_ok:
-            cat_sum["grade_accuracy"] = round(len(g3_ok) / len(rows) * 100, 2)
+        from services.experiment_service import summarize_category
+        cat_sum = summarize_category(rows)
         summary[cat] = cat_sum
         print(f"[{cat}] 样本 {len(rows)} 张")
 
@@ -190,33 +236,18 @@ def main():
         sys.exit(1)
 
     # 汇总为 API 结构
-    models_union = []
-    accuracy = {}
-    n_map = {}
-    mcnemar = {}
-    for cat, cs in summary.items():
-        n_map[cat] = cs["n"]
-        accuracy[cat] = {}
-        for m in cs.get("models", []):
-            accuracy[cat][m["name"]] = m["accuracy"]
-            if m["name"] not in models_union:
-                models_union.append(m["name"])
-        if "mcnemar" in cs:
-            mcnemar[cat] = cs["mcnemar"]
-        if cs["grade_accuracy"] is not None:
-            accuracy[cat]["pipeline"] = cs["grade_accuracy"]
-            if "pipeline" not in models_union:
-                models_union.append("pipeline")
-
+    from services.experiment_service import build_result
+    base = build_result(summary)
     result = {
         "source": "experiment",
         "generated_at": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
-        "categories": list(summary.keys()),
-        "models": models_union,
-        "accuracy": accuracy,
-        "n": n_map,
-        "mcnemar": mcnemar,
-        "grade_accuracy": {c: s["grade_accuracy"] for c, s in summary.items()},
+        "categories": base["categories"],
+        "models": base["models"],
+        "accuracy": base["accuracy"],
+        "n": base["n"],
+        "mcnemar": base["mcnemar"],
+        "grade_accuracy": base["grade_accuracy"],
+        "details": base["details"],
         "note": "实验数据: 自动生成于 " + datetime.now().strftime("%Y-%m-%d %H:%M"),
     }
     json_path = OUTPUT_DIR / "experiment_results.json"

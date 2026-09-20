@@ -7,3 +7,7 @@ torch>=2.0
 ultralytics>=8.0
 scipy>=1.10
 pytest>=7.0
+waitress>=3.0
+
+# Supabase 登录（用户数据）
+requests>=2.28

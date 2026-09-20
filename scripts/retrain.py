@@ -295,6 +295,8 @@ def train_dl(category, epochs, log):
 
 def run_retrain(category, models, epochs=15, log=None):
     _log(log, f"=== 一键重训: {category} / {models} ===")
+    if category == 'apple_slice':
+        raise RuntimeError("切片品类（apple_slice）禁止重训：防止覆盖外观模型。切片检测使用独立规则算法。")
     if not (DATASET_DIR / category).is_dir():
         raise RuntimeError(f"品类目录不存在: {category}")
 

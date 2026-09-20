@@ -1,0 +1,16 @@
+{
+  "api_key": "在这里粘贴阿里云百炼APIKey",
+  "base_url": "https://dashscope.aliyuncs.com/compatible-mode/v1",
+  "model": "qwen3-vl-flash",
+  "models": [
+    "qwen3-vl-flash",
+    "qwen3-vl-plus"
+  ],
+  "source": "E:/apple/yolo_pseudo/images",
+  "out": "E:/apple/auto_label_output_qwen",
+  "high_conf": 0.6,
+  "max_side": 1100,
+  "sleep": 0.4,
+  "coord_scale": 1000,
+  "defect_types": []
+}

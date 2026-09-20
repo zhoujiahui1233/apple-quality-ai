@@ -1,0 +1,4 @@
+directories:
+  data: E:\ArduinoData
+  build:
+    path: E:\ArduinoBuild
