@@ -1,0 +1,21 @@
+﻿file,status,n_apple,n_defect,max_conf,types,label,viz,msg
+apple (10).jpg,review,1,0,0.0,,E:\apple\auto_label_output\labels\apple (10).txt,E:\apple\auto_label_output\viz\apple (10).jpg,
+apple (105).jpg,review,4,0,0.0,,E:\apple\auto_label_output\labels\apple (105).txt,E:\apple\auto_label_output\viz\apple (105).jpg,
+apple (120).jpg,review,1,0,0.0,,E:\apple\auto_label_output\labels\apple (120).txt,E:\apple\auto_label_output\viz\apple (120).jpg,
+apple (129).jpg,review,7,7,0.5,缺陷,E:\apple\auto_label_output\labels\apple (129).txt,E:\apple\auto_label_output\viz\apple (129).jpg,
+apple (133).jpg,review,6,0,0.0,,E:\apple\auto_label_output\labels\apple (133).txt,E:\apple\auto_label_output\viz\apple (133).jpg,
+apple (135).jpg,error,0,0,0.0,,,,模型输出中没有可解析的 JSON
+apple (138).jpg,review,1,0,0.0,,E:\apple\auto_label_output\labels\apple (138).txt,E:\apple\auto_label_output\viz\apple (138).jpg,
+apple (149).jpg,review,1,0,0.0,,E:\apple\auto_label_output\labels\apple (149).txt,E:\apple\auto_label_output\viz\apple (149).jpg,
+apple (154).jpg,none,0,0,0.0,,E:\apple\auto_label_output\labels\apple (154).txt,,
+apple (156).jpg,review,8,0,0.0,,E:\apple\auto_label_output\labels\apple (156).txt,E:\apple\auto_label_output\viz\apple (156).jpg,
+apple (157).jpg,ok,0,1,0.75,缺陷,E:\apple\auto_label_output\labels\apple (157).txt,E:\apple\auto_label_output\viz\apple (157).jpg,
+apple (182).jpg,review,1,0,0.0,,E:\apple\auto_label_output\labels\apple (182).txt,E:\apple\auto_label_output\viz\apple (182).jpg,
+apple (191).jpg,error,0,0,0.0,,,,模型输出中没有可解析的 JSON
+apple (200).jpg,review,1,0,0.0,,E:\apple\auto_label_output\labels\apple (200).txt,E:\apple\auto_label_output\viz\apple (200).jpg,
+apple (202).jpg,review,1,0,0.0,,E:\apple\auto_label_output\labels\apple (202).txt,E:\apple\auto_label_output\viz\apple (202).jpg,
+apple (212).jpg,review,5,1,0.5,缺陷,E:\apple\auto_label_output\labels\apple (212).txt,E:\apple\auto_label_output\viz\apple (212).jpg,
+apple (227).jpg,review,5,0,0.0,,E:\apple\auto_label_output\labels\apple (227).txt,E:\apple\auto_label_output\viz\apple (227).jpg,
+apple (232).jpg,review,1,0,0.0,,E:\apple\auto_label_output\labels\apple (232).txt,E:\apple\auto_label_output\viz\apple (232).jpg,
+apple (240).jpg,review,1,0,0.0,,E:\apple\auto_label_output\labels\apple (240).txt,E:\apple\auto_label_output\viz\apple (240).jpg,
+apple (241).jpg,review,1,0,0.0,,E:\apple\auto_label_output\labels\apple (241).txt,E:\apple\auto_label_output\viz\apple (241).jpg,

@@ -1,0 +1,352 @@
+{
+  "generated_at": "2026-08-06 14:51:58",
+  "n_samples": 24,
+  "qda_internal": {
+    "qda_color": {
+      "n": 24,
+      "mean": 5.96,
+      "std": 1.71
+    },
+    "qda_odor": {
+      "n": 24,
+      "mean": 6.04,
+      "std": 1.65
+    },
+    "qda_taste": {
+      "n": 24,
+      "mean": 6.12,
+      "std": 1.75
+    },
+    "qda_texture": {
+      "n": 24,
+      "mean": 5.75,
+      "std": 1.92
+    },
+    "qda_overall": {
+      "n": 24,
+      "mean": 6.12,
+      "std": 1.78
+    }
+  },
+  "pearson": {
+    "qda_color": {
+      "brix": {
+        "r": 0.875,
+        "p": 0.0
+      },
+      "hardness": {
+        "r": 0.868,
+        "p": 0.0
+      },
+      "ph": {
+        "r": -0.139,
+        "p": 0.5186
+      },
+      "weight_g": {
+        "r": -0.008,
+        "p": 0.969
+      },
+      "visual_exists": {
+        "r": null,
+        "p": null
+      },
+      "odor_exists": {
+        "r": null,
+        "p": null
+      }
+    },
+    "qda_odor": {
+      "hardness": {
+        "r": 0.861,
+        "p": 0.0
+      },
+      "brix": {
+        "r": 0.84,
+        "p": 0.0
+      },
+      "ph": {
+        "r": -0.126,
+        "p": 0.5572
+      },
+      "weight_g": {
+        "r": 0.119,
+        "p": 0.5793
+      },
+      "visual_exists": {
+        "r": null,
+        "p": null
+      },
+      "odor_exists": {
+        "r": null,
+        "p": null
+      }
+    },
+    "qda_taste": {
+      "brix": {
+        "r": 0.864,
+        "p": 0.0
+      },
+      "hardness": {
+        "r": 0.852,
+        "p": 0.0
+      },
+      "ph": {
+        "r": -0.167,
+        "p": 0.4364
+      },
+      "weight_g": {
+        "r": 0.052,
+        "p": 0.811
+      },
+      "visual_exists": {
+        "r": null,
+        "p": null
+      },
+      "odor_exists": {
+        "r": null,
+        "p": null
+      }
+    },
+    "qda_texture": {
+      "hardness": {
+        "r": 0.903,
+        "p": 0.0
+      },
+      "brix": {
+        "r": 0.899,
+        "p": 0.0
+      },
+      "ph": {
+        "r": -0.082,
+        "p": 0.7025
+      },
+      "weight_g": {
+        "r": 0.072,
+        "p": 0.7389
+      },
+      "visual_exists": {
+        "r": null,
+        "p": null
+      },
+      "odor_exists": {
+        "r": null,
+        "p": null
+      }
+    },
+    "qda_overall": {
+      "brix": {
+        "r": 0.883,
+        "p": 0.0
+      },
+      "hardness": {
+        "r": 0.838,
+        "p": 0.0
+      },
+      "ph": {
+        "r": -0.206,
+        "p": 0.3341
+      },
+      "weight_g": {
+        "r": 0.047,
+        "p": 0.826
+      },
+      "visual_exists": {
+        "r": null,
+        "p": null
+      },
+      "odor_exists": {
+        "r": null,
+        "p": null
+      }
+    }
+  },
+  "regression": {
+    "qda_color": {
+      "r2": 0.419,
+      "mae": 0.809,
+      "n": 24
+    },
+    "qda_odor": {
+      "r2": 0.185,
+      "mae": 0.883,
+      "n": 24
+    },
+    "qda_taste": {
+      "r2": 0.16,
+      "mae": 0.883,
+      "n": 24
+    },
+    "qda_texture": {
+      "r2": 0.594,
+      "mae": 0.606,
+      "n": 24
+    },
+    "qda_overall": {
+      "r2": 0.488,
+      "mae": 0.781,
+      "n": 24
+    }
+  },
+  "pca": {
+    "explained_variance": [
+      0.4979,
+      0.3187,
+      0.1694,
+      0.014,
+      0.0,
+      0.0
+    ],
+    "components": {
+      "PC1": {
+        "explained": 0.4979,
+        "top_features": [
+          {
+            "feature": "hardness",
+            "loading": 0.691
+          },
+          {
+            "feature": "brix",
+            "loading": 0.679
+          },
+          {
+            "feature": "weight_g",
+            "loading": 0.238
+          },
+          {
+            "feature": "ph",
+            "loading": 0.068
+          },
+          {
+            "feature": "odor_exists",
+            "loading": -0.0
+          }
+        ]
+      },
+      "PC2": {
+        "explained": 0.3187,
+        "top_features": [
+          {
+            "feature": "ph",
+            "loading": 0.729
+          },
+          {
+            "feature": "weight_g",
+            "loading": 0.651
+          },
+          {
+            "feature": "brix",
+            "loading": -0.172
+          },
+          {
+            "feature": "hardness",
+            "loading": -0.127
+          },
+          {
+            "feature": "odor_exists",
+            "loading": -0.0
+          }
+        ]
+      },
+      "PC3": {
+        "explained": 0.1694,
+        "top_features": [
+          {
+            "feature": "weight_g",
+            "loading": 0.716
+          },
+          {
+            "feature": "ph",
+            "loading": -0.68
+          },
+          {
+            "feature": "brix",
+            "loading": -0.155
+          },
+          {
+            "feature": "hardness",
+            "loading": -0.027
+          },
+          {
+            "feature": "odor_exists",
+            "loading": 0.0
+          }
+        ]
+      },
+      "PC4": {
+        "explained": 0.014,
+        "top_features": [
+          {
+            "feature": "hardness",
+            "loading": 0.711
+          },
+          {
+            "feature": "brix",
+            "loading": -0.696
+          },
+          {
+            "feature": "weight_g",
+            "loading": -0.088
+          },
+          {
+            "feature": "ph",
+            "loading": 0.038
+          },
+          {
+            "feature": "odor_exists",
+            "loading": 0.0
+          }
+        ]
+      },
+      "PC5": {
+        "explained": 0.0,
+        "top_features": [
+          {
+            "feature": "odor_exists",
+            "loading": 1.0
+          },
+          {
+            "feature": "hardness",
+            "loading": 0.0
+          },
+          {
+            "feature": "weight_g",
+            "loading": 0.0
+          },
+          {
+            "feature": "ph",
+            "loading": -0.0
+          },
+          {
+            "feature": "brix",
+            "loading": 0.0
+          }
+        ]
+      },
+      "PC6": {
+        "explained": 0.0,
+        "top_features": [
+          {
+            "feature": "visual_exists",
+            "loading": 1.0
+          },
+          {
+            "feature": "ph",
+            "loading": 0.0
+          },
+          {
+            "feature": "brix",
+            "loading": 0.0
+          },
+          {
+            "feature": "weight_g",
+            "loading": 0.0
+          },
+          {
+            "feature": "hardness",
+            "loading": 0.0
+          }
+        ]
+      }
+    }
+  }
+}

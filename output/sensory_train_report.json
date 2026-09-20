@@ -1,0 +1,22 @@
+{
+  "generated_at": "2026-08-06 15:31:00",
+  "cv": 5,
+  "model_dir": "E:\\apple\\models\\sensory_models",
+  "n_labels": 0,
+  "labels": [],
+  "visual": {
+    "n": 0,
+    "note": "too few samples or single class"
+  },
+  "odor": {
+    "n": 0,
+    "note": "too few samples or single class"
+  },
+  "phys": {
+    "n": 0,
+    "note": "too few samples or single class"
+  },
+  "fusion": {
+    "note": "aligned samples < 8 (need visual+odor+phys together)"
+  }
+}

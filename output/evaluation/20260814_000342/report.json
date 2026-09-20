@@ -1,0 +1,84 @@
+{
+  "mode": "test",
+  "generated_at": "2026-08-14 00:04:26",
+  "data_dir": "E:\\apple\\dataset_collected\\apple",
+  "n_samples": 48,
+  "n_skipped": 1,
+  "class_distribution": {
+    "good": 42,
+    "bad": 6
+  },
+  "models": {
+    "svm": {
+      "accuracy": 0.3542,
+      "precision": 0.1429,
+      "recall": 0.8333,
+      "f1": 0.2439,
+      "confusion_matrix": [
+        [
+          12,
+          30
+        ],
+        [
+          1,
+          5
+        ]
+      ],
+      "usable": 48
+    },
+    "rf": {
+      "accuracy": 0.5208,
+      "precision": 0.0526,
+      "recall": 0.1667,
+      "f1": 0.08,
+      "confusion_matrix": [
+        [
+          24,
+          18
+        ],
+        [
+          5,
+          1
+        ]
+      ],
+      "usable": 48
+    },
+    "dl": {
+      "accuracy": 0.5417,
+      "precision": 0.0556,
+      "recall": 0.1667,
+      "f1": 0.0833,
+      "confusion_matrix": [
+        [
+          25,
+          17
+        ],
+        [
+          5,
+          1
+        ]
+      ],
+      "usable": 48
+    },
+    "yolo": {
+      "accuracy": 0.2917,
+      "precision": 0.1111,
+      "recall": 0.6667,
+      "f1": 0.1905,
+      "confusion_matrix": [
+        [
+          10,
+          32
+        ],
+        [
+          2,
+          4
+        ]
+      ],
+      "usable": 48
+    }
+  },
+  "pipeline3_accuracy": 0.4167,
+  "error_samples": 13,
+  "compare": "模型   上次acc → 本次acc    Δ\n----------------------------------------\nSVM    0.3542 → 0.3542   +0.0000\nRF     0.5208 → 0.5208   +0.0000\nDL     0.5417 → 0.5417   +0.0000\nYOLO   0.2917 → 0.2917   +0.0000\n上次数据: E:\\apple\\dataset_collected\\apple（48 张，2026-08-13 23:56:59）"
+}

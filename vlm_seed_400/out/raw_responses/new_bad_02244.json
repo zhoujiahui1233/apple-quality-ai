@@ -1,0 +1,2 @@
+{"apples":[{"box":[130,78,862,904]}],"defects":[{"type":"defect","box":[175,420,250,500],"conf":0.95},{"type":"defect","box":[250,375,290,420],"conf":0.9},{"type":"defect","box":[290,420,330,460],"conf":0.9},{"type":"defect","box":[330,400,370,440],"conf":0.85},{"type":"defect","box":[525,600,550,630],"conf":0.9},{"type":"defect","box":[575,620,600,650],"conf":0.9},{"type":"defect","box": [600,580,630,610],"conf":0.85},{"type":"defect","box": [630,600,660,630],"conf":0.85},{"type":"defect","box": [660,620,690,650],"conf":0.8}]}
+

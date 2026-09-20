@@ -1,0 +1,40 @@
+{
+  "source": "robustness_test",
+  "generated_at": "2026-07-31 22:50:05",
+  "category": "apple",
+  "n": 8,
+  "perturbations": [
+    "clean",
+    "blur2",
+    "rot15"
+  ],
+  "models": [
+    "svm",
+    "rf",
+    "dl",
+    "yolo"
+  ],
+  "accuracy": {
+    "svm": {
+      "clean": 50.0,
+      "blur2": 37.5,
+      "rot15": 50.0
+    },
+    "rf": {
+      "clean": 12.5,
+      "blur2": 37.5,
+      "rot15": 12.5
+    },
+    "dl": {
+      "clean": 0.0,
+      "blur2": 12.5,
+      "rot15": 0.0
+    },
+    "yolo": {
+      "clean": 50.0,
+      "blur2": 37.5,
+      "rot15": 37.5
+    }
+  },
+  "note": "准确率为二分类(合格/不合格)一致率"
+}

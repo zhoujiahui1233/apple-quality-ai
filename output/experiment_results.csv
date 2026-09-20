@@ -1,0 +1,17 @@
+﻿category,file,y_true,y3,svm,rf,dl,yolo,pipeline3
+apple,dataset_collected\apple\不合格\不合格_20260731_201146_413.jpg,bad,reject,bad,good,good,bad,premium
+apple,dataset_collected\apple\不合格\不合格_20260731_201146_413_crop.jpg,bad,reject,bad,good,good,bad,premium
+apple,dataset_collected\apple\不合格\不合格_20260731_203254_512.jpg,bad,reject,bad,bad,good,bad,premium
+apple,dataset_collected\apple\不合格\不合格_20260731_210426_164.jpg,bad,reject,bad,good,good,bad,premium
+apple,dataset_collected\apple\不合格\不合格_20260731_210542_591.jpg,bad,reject,bad,bad,good,bad,premium
+apple,dataset_collected\apple\不合格\不合格_20260731_213257_407.jpg,bad,reject,bad,good,good,good,premium
+apple,dataset_collected\apple\合格\合格_20260731_194830_808.jpg,good,standard,bad,bad,bad,bad,reject
+apple,dataset_collected\apple\合格\合格_20260731_194830_808_crop.jpg,good,standard,bad,bad,bad,bad,reject
+apple,dataset_collected\apple\合格\合格_20260731_194851_643.jpg,good,standard,bad,bad,bad,bad,reject
+apple,dataset_collected\apple\合格\合格_20260731_194851_643_crop.jpg,good,standard,bad,bad,bad,bad,reject
+apple,dataset_collected\apple\合格\合格_20260731_194906_050.jpg,good,standard,bad,bad,bad,bad,reject
+apple,dataset_collected\apple\合格\合格_20260731_194906_050_crop.jpg,good,standard,bad,bad,bad,bad,reject
+apple,dataset_collected\apple\合格\合格_20260731_210453_089.jpg,good,standard,bad,good,good,bad,premium
+apple,dataset_collected\apple\合格\合格_20260731_210513_882.jpg,good,standard,bad,good,good,bad,premium
+apple,dataset_collected\apple\合格\合格_20260731_210606_083.jpg,good,standard,bad,good,good,bad,premium
+apple,dataset_collected\apple\合格\合格_20260731_210624_018.jpg,good,standard,bad,bad,good,bad,premium

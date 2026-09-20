@@ -1,0 +1,56 @@
+������������: E:\apple\clean_dataset_v1\features.npz
+����ά��: (16663, 185) | train 14163, val 2500
+
+[����] ����ģ����ͬһ�ݸɾ� val ��:
+  SVM(����)    acc=79.96%  bal_acc=80.21%
+  RF(����)     acc=79.16%  bal_acc=81.07%
+
+[1/2] SVM ����������...
+    9 ����� x 4 �ۣ�12 ���̲���
+Traceback (most recent call last):
+  File "E:\apple\scripts\retrain_ml_clean.py", line 254, in <module>
+    main()
+    ~~~~^^
+  File "E:\apple\scripts\retrain_ml_clean.py", line 212, in main
+    C, gm, cv_svm = train_svm_cv(Xtr_s, ytr, gtr, jobs=args.jobs)
+                    ~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "E:\apple\scripts\retrain_ml_clean.py", line 128, in train_svm_cv
+    res = Parallel(n_jobs=jobs, verbose=0)(
+        delayed(_svm_cv_one)(Xs, y, gkf, C, gm) for C, gm in grid)
+  File "E:\anaconda3\Lib\site-packages\joblib\parallel.py", line 1909, in __call__
+    n_jobs = self._initialize_backend()
+  File "E:\anaconda3\Lib\site-packages\joblib\parallel.py", line 1359, in _initialize_backend
+    n_jobs = self._backend.configure(n_jobs=self.n_jobs, parallel=self,
+                                     **self._backend_args)
+  File "E:\anaconda3\Lib\site-packages\joblib\_parallel_backends.py", line 538, in configure
+    self._workers = get_memmapping_executor(
+                    ~~~~~~~~~~~~~~~~~~~~~~~^
+        n_jobs, timeout=idle_worker_timeout,
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+        env=self._prepare_worker_env(n_jobs=n_jobs),
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+        context_id=parallel._id, **memmappingexecutor_args)
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "E:\anaconda3\Lib\site-packages\joblib\executor.py", line 20, in get_memmapping_executor
+    return MemmappingExecutor.get_memmapping_executor(n_jobs, **kwargs)
+           ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^
+  File "E:\anaconda3\Lib\site-packages\joblib\executor.py", line 42, in get_memmapping_executor
+    manager = TemporaryResourcesManager(temp_folder)
+  File "E:\anaconda3\Lib\site-packages\joblib\_memmapping_reducer.py", line 540, in __init__
+    self.set_current_context(context_id)
+    ~~~~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^
+  File "E:\anaconda3\Lib\site-packages\joblib\_memmapping_reducer.py", line 544, in set_current_context
+    self.register_new_context(context_id)
+    ~~~~~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^
+  File "E:\anaconda3\Lib\site-packages\joblib\_memmapping_reducer.py", line 569, in register_new_context
+    self.register_folder_finalizer(new_folder_path, context_id)
+    ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "E:\anaconda3\Lib\site-packages\joblib\_memmapping_reducer.py", line 585, in register_folder_finalizer
+    resource_tracker.register(pool_subfolder, "folder")
+    ~~~~~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "E:\anaconda3\Lib\site-packages\joblib\externals\loky\backend\resource_tracker.py", line 179, in register
+    self._send("REGISTER", name, rtype)
+    ~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "E:\anaconda3\Lib\site-packages\joblib\externals\loky\backend\resource_tracker.py", line 196, in _send
+    msg = f"{cmd}:{name}:{rtype}\n".encode("ascii")
+UnicodeEncodeError: 'ascii' codec can't encode character '\u6656' in position 18: ordinal not in range(128)

@@ -1,0 +1,1 @@
+{"apples":[{"box":[0,0,1000,984]}],"defects":[{"type":"defect","box":[625,0,875,325],"conf":0.95},{"type":"defect","box": [725,550,800,650],"conf":0.9},{"type":"defect","box":[300,10,500,200],"conf":0.85}]}

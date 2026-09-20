@@ -1,0 +1,38 @@
+������������: E:\apple\clean_dataset_v1\features.npz
+����ά��: (16663, 185) | train 14163, val 2500
+
+[����] ����ģ����ͬһ�ݸɾ� val ��:
+  SVM(����)    acc=79.96%  bal_acc=80.21%
+  RF(����)     acc=79.16%  bal_acc=81.07%
+
+[1/2] SVM ����������...
+    9 ����� x 4 �ۣ�12 ���̲���
+    SVM C=10    gamma=0.005  bal_acc=94.90%
+    SVM C=10    gamma=0.01   bal_acc=94.87%
+    SVM C=100   gamma=0.01   bal_acc=94.68%
+    SVM C=50    gamma=0.005  bal_acc=94.67%
+    SVM C=50    gamma=0.01   bal_acc=94.65%
+    SVM C=100   gamma=0.005  bal_acc=94.55%
+    SVM C=50    gamma=0.02   bal_acc=94.28%
+    SVM C=100   gamma=0.02   bal_acc=94.28%
+    SVM C=10    gamma=0.02   bal_acc=94.26%
+  ���� SVM: C=10 gamma=0.005 (CV bal_acc=94.90%)
+
+[2/2] RF ����������...
+    RF n=400  depth=None  leaf=1  bal_acc=94.09%
+    RF n=700  depth=None  leaf=2  bal_acc=94.06%
+    RF n=700  depth=30    leaf=1  bal_acc=94.11%
+  ���� RF: n=700 depth=30 leaf=1 (CV bal_acc=94.11%)
+
+ѵ������ģ��...
+
+===== �ɾ���֤����� (train �����з�, val ��ȫδ�����Ĵ�) =====
+model               acc      bal_acc
+SVM(����)          79.96%       80.21%
+RF(����)           79.16%       81.07%
+SVM(��)           95.68%       95.44%
+RF(��)            95.08%       94.46%
+
+��ģ���ѱ��棨δ��������ģ�ͣ�:
+  apple_svm_model_clean.dat / apple_rf_model_clean.pkl / apple_scaler_clean.pkl
+  �л���ʽ���� config.MODEL_PATHS ָ�� *_clean.* ����

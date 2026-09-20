@@ -1,0 +1,16 @@
+{
+  "mode": "consistency",
+  "n_usable": 48,
+  "n_skipped": 1,
+  "full_agree_ratio": 0.4167,
+  "pair_agree": {
+    "svm-yolo": 0.7708,
+    "rf-svm": 0.5417,
+    "rf-yolo": 0.6458,
+    "dl-svm": 0.5208,
+    "dl-rf": 0.8958,
+    "dl-yolo": 0.5833
+  },
+  "n_disagree": 28,
+  "generated_at": "2026-08-13 23:58:47"
+}

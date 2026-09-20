@@ -1,0 +1,38 @@
+{
+  "generated_at": "2026-08-06 15:25:51",
+  "cv": 5,
+  "model_dir": "E:\\apple\\models\\sensory_models",
+  "n_labels": 3,
+  "labels": [
+    "fresh",
+    "mid",
+    "rotten"
+  ],
+  "visual": {
+    "n": 15,
+    "acc": 100.0,
+    "std": 0.0
+  },
+  "odor": {
+    "n": 15,
+    "acc": 93.33,
+    "std": 9.43
+  },
+  "phys": {
+    "n": 15,
+    "acc": 100.0,
+    "std": 0.0
+  },
+  "fusion": {
+    "concat": {
+      "n": 15,
+      "acc": 100.0,
+      "std": 0.0
+    },
+    "late": {
+      "n": 15,
+      "acc": 100.0,
+      "std": 0.0
+    }
+  }
+}

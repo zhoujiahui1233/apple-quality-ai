@@ -1,0 +1,51 @@
+{
+  "generated_at": "2026-08-06 14:51:26",
+  "inputs": {
+    "visual": "E:\\apple\\output\\visual_features.csv",
+    "odor": "E:\\apple\\multimodal_data\\odor\\features.csv",
+    "phys": "E:\\apple\\multimodal_data\\touch\\touch.csv"
+  },
+  "results": [
+    {
+      "modality": "visual",
+      "acc": 100.0,
+      "std": 0.0,
+      "n": 24,
+      "cv": 5
+    },
+    {
+      "modality": "odor",
+      "acc": 100.0,
+      "std": 0.0,
+      "n": 24,
+      "cv": 5
+    },
+    {
+      "modality": "phys",
+      "acc": 100.0,
+      "std": 0.0,
+      "n": 24,
+      "cv": 5
+    },
+    {
+      "modality": "fused_concat",
+      "acc": 100.0,
+      "std": 0.0,
+      "n": 24,
+      "cv": 5
+    },
+    {
+      "modality": "fused_late",
+      "acc": 100.0,
+      "std": 0.0,
+      "n": 24,
+      "cv": 5
+    },
+    {
+      "modality": "mcnemar",
+      "fused_vs": "visual",
+      "p_value": 1.0,
+      "significant": false
+    }
+  ]
+}

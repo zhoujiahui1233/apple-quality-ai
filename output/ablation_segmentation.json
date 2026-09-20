@@ -1,0 +1,23 @@
+{
+  "source": "ablation_segmentation",
+  "generated_at": "2026-07-31 22:49:16",
+  "category": "apple",
+  "n_train": 11,
+  "n_val": 5,
+  "epochs": 3,
+  "seed": 42,
+  "results": {
+    "raw": {
+      "train_acc": 72.73,
+      "val_acc": 60.0,
+      "device": "cpu",
+      "seconds": 2.6
+    },
+    "seg": {
+      "train_acc": 63.64,
+      "val_acc": 60.0,
+      "device": "cpu",
+      "seconds": 2.8
+    }
+  }
+}
