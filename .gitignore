@@ -57,6 +57,10 @@ LabelImg/
 # Ultralytics 运行时配置（含本机绝对路径）
 Ultralytics/
 
+# 隔离区：保留说明与清单，数据文件不入库
+enose/data/_quarantine/synthetic/
+enose/data/_quarantine/unknown/
+
 # 独立子项目（自带 .git），不纳入本仓库
 label-compliance/
 
