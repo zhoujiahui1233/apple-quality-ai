@@ -1,6 +1,6 @@
 # 智果 · AI 品控系统
 
-基于机器视觉与深度学习的**多品类食品品质无损检测与分级系统**（本科毕业设计项目，食品科学与工程专业）。
+基于机器视觉与深度学习的**多品类食品品质无损检测与分级系统**。
 
 支持苹果、面包、饮料三类食品的表面缺陷检测与三级分级（优等 / 合格 / 不合格），集成 **SVM、随机森林、深度学习、YOLO** 四种模型，并提供显著性分析、数据闭环与移动端访问。
 
@@ -121,10 +121,11 @@ python scripts/backup.py --clean 5  # 只保留最新 5 个备份
 - 视觉：OpenCV（HSV 分割）、PyTorch、Ultralytics YOLO
 - 统计：scipy（McNemar/Kappa/相关分析）
 
-## 论文相关
+## 设计文档
 
-- 设计文档：`docs/superpowers/specs/2026-07-31-food-quality-system-design.md`
-- 论文大纲：`docs/thesis-outline.md`
+- 系统设计：`docs/superpowers/specs/2026-07-31-food-quality-system-design.md`
+- 架构说明：`docs/architecture.md`
+- 数据说明：`docs/DATA_GUIDE.md`
 ---
 
 ## 登录系统（Supabase）

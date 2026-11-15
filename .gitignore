@@ -100,6 +100,9 @@ _归档_一次性脚本/_expand_thesis.py
 _归档_一次性脚本/_gen_handbook.py
 _归档_一次性脚本/_patch_thesis_dl.py
 论文素材/
+_归档_一次性脚本/
+_gen_structure_doc.py
+_personal_paths2.txt
 
 # 本次新增的大数据集与临时文件
 defect_dataset_clean_v2/

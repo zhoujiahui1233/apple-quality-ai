@@ -134,5 +134,4 @@ sample_id = 日期 + 品种 + 序号（如 20260806_apple_001）
 
 - 电子鼻方案：`enose/protocol.md`（实验方案）、`enose/README.md`（采购/接线/流水线）
 - 苹果等级标准：`docs/apple-grading-standard.md`
-- 毕设总计划：`docs/thesis-plan.md`
 - 论文吸收报告：`PAPER_ABSORPTION.md`

@@ -32,7 +32,7 @@ ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 CLEAN = os.path.join(ROOT, "clean_dataset_v1")
 MANIFEST = os.path.join(CLEAN, "manifest.csv")
 FEAT_CACHE = os.path.join(CLEAN, "features.npz")
-# joblib 的默认临时目录在 C:\Users\晖\... （含中文），loky 的 resource_tracker
+# joblib 的默认临时目录在用户目录下（可能含中文），loky 的 resource_tracker
 # 会用 ASCII 编码路径而崩溃；显式指到全 ASCII 目录规避。
 JOBLIB_TMP = os.path.join(ROOT, "_joblib_tmp")
 os.makedirs(JOBLIB_TMP, exist_ok=True)

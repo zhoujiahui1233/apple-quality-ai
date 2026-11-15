@@ -1,6 +1,6 @@
 @echo off
 setlocal
-set "CLI=C:\Users\晖\AppData\Local\Programs\Arduino IDE\resources\app\lib\backend\resources\arduino-cli.exe"
+set "CLI=%LOCALAPPDATA%\Programs\Arduino IDE\resources\app\lib\backend\resources\arduino-cli.exe"
 set "ARDUINO_DIRECTORIES_DATA=E:\ArduinoData"
 set "PORT=COM10"
 

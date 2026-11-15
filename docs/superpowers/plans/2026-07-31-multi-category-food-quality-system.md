@@ -1051,7 +1051,6 @@ logger.addHandler(handler)
 - Create: `README.md` - 项目介绍/快速开始
 - Create: `docs/architecture.md` - 架构说明
 - Create: `docs/userguide.md` - 使用手册
-- Create: `docs/thesis-outline.md` - 论文大纲（含开题思路）
 
 ### Task 10.2: 实验数据采集指引
 
