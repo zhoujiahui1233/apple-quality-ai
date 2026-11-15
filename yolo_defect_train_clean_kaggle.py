@@ -19,7 +19,11 @@ import os, glob, zipfile, json
 def locate():
     zips = glob.glob("/kaggle/input/**/*.zip", recursive=True)
     # 按文件名认数据包，避免误取到脚本包等其它 zip
-    pref = [z for z in zips if "defect" in os.path.basename(z).lower()]
+    # 优先取 clean_v2（清洗后版本），其次任意 defect 包
+    pref = [z for z in zips if "defect" in os.path.basename(z).lower()
+            and "v2" in os.path.basename(z).lower()]
+    if not pref:
+        pref = [z for z in zips if "defect" in os.path.basename(z).lower()]
     if pref:
         return max(pref, key=os.path.getsize), True
     if zips:

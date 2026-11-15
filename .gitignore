@@ -77,3 +77,32 @@ output/**
 !output/**/*.json
 !output/**/*.txt
 !output/**/*.html
+
+# ─────────────────────────────────────────────────────────────
+# 个人材料：不进仓库（简历 / 论文 / 答辩 / 选题等）
+# ─────────────────────────────────────────────────────────────
+个人简历*.pdf
+个人简历*.docx
+某高校社会实践活动认定表*.docx
+答辩准备手册.*
+论文写作说明.*
+论文初稿*.docx
+论文初稿*.pdf
+选题方案大纲*.*
+选题设想*.*
+_fix_resume*.py
+_gen_resume*.py
+docs/thesis-outline.md
+docs/thesis-plan.md
+docs/毕业论文*.docx
+_归档_一次性脚本/_gen_thesis*.py
+_归档_一次性脚本/_expand_thesis.py
+_归档_一次性脚本/_gen_handbook.py
+_归档_一次性脚本/_patch_thesis_dl.py
+论文素材/
+
+# 本次新增的大数据集与临时文件
+defect_dataset_clean_v2/
+_build_clean.log
+_tracked_files.txt
+_personal_paths.txt
